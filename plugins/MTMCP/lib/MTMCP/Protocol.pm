@@ -23,6 +23,7 @@ my %TOOL_HANDLERS = (
     'template_update'      => sub { require MTMCP::Tools::Template;     MTMCP::Tools::Template::update(@_)       },
     'content_type_list'    => sub { require MTMCP::Tools::ContentType;  MTMCP::Tools::ContentType::list(@_)      },
     'content_type_get'     => sub { require MTMCP::Tools::ContentType;  MTMCP::Tools::ContentType::get(@_)       },
+    'content_type_create'  => sub { require MTMCP::Tools::ContentType;  MTMCP::Tools::ContentType::create(@_)    },
     'content_data_list'    => sub { require MTMCP::Tools::ContentData;  MTMCP::Tools::ContentData::list(@_)      },
     'content_data_get'     => sub { require MTMCP::Tools::ContentData;  MTMCP::Tools::ContentData::get(@_)       },
     'content_data_create'  => sub { require MTMCP::Tools::ContentData;  MTMCP::Tools::ContentData::create(@_)    },
@@ -242,6 +243,32 @@ sub _tool_definitions {
                 required => ['content_type_id'],
                 properties => {
                     content_type_id => { type => 'integer', description => 'コンテンツタイプID（content_type_list で確認）' },
+                },
+            },
+        },
+        {
+            name        => 'content_type_create',
+            description => 'コンテンツタイプを新規作成する。fields を省略すると「タイトル」「本文」の2フィールドが作られる。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id', 'name'],
+                properties => {
+                    blog_id     => { type => 'integer', description => 'ブログID（blog_list で確認）' },
+                    name        => { type => 'string',  description => 'コンテンツタイプ名' },
+                    description => { type => 'string',  description => '説明文' },
+                    fields      => {
+                        type  => 'array',
+                        items => {
+                            type       => 'object',
+                            properties => {
+                                type        => { type => 'string',  description => 'single_line_text / multi_line_text など' },
+                                label       => { type => 'string',  description => 'フィールドラベル' },
+                                order       => { type => 'integer', description => '表示順' },
+                                label_field => { type => 'boolean', description => 'データラベルに使うフィールド' },
+                                required    => { type => 'boolean', description => '必須かどうか' },
+                            },
+                        },
+                    },
                 },
             },
         },
