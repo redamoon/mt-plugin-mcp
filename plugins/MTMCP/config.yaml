@@ -1,0 +1,22 @@
+name: MT MCP Server
+id: MTMCP
+key: MTMCP
+version: 0.1.0
+schema_version: 0.1
+description: Movable Type 9 用 MCP (Model Context Protocol) サーバープラグイン
+
+author_name: ''
+author_link: ''
+
+settings:
+  api_token:
+    default: ''
+    scope: system
+
+applications:
+  cms:
+    routes:
+      mcp_endpoint:
+        path: /mcp
+        handler: $MTMCP::MTMCP::App::handle
+        requires_login: 0
