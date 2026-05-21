@@ -1,11 +1,14 @@
 package MTMCP::Protocol;
 use strict;
 use warnings;
-use JSON::XS;
+use JSON;
 
 our $PROTOCOL_VERSION = '2024-11-05';
 
+my $json = JSON->new->utf8->canonical;
+
 my %TOOL_HANDLERS = (
+    'blog_list'       => sub { require MTMCP::Tools::Blog;     MTMCP::Tools::Blog::list(@_)         },
     'entry_list'      => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::list(@_)        },
     'entry_get'       => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::get(@_)         },
     'entry_create'    => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::create(@_)      },
@@ -28,7 +31,7 @@ sub dispatch {
     if ($method eq 'initialize') {
         return _result($id, {
             protocolVersion => $PROTOCOL_VERSION,
-            capabilities    => { tools => { listChanged => JSON::XS::false } },
+            capabilities    => { tools => { listChanged => JSON::false } },
             serverInfo      => { name => 'MT MCP Server', version => '0.1.0' },
         });
     }
@@ -53,11 +56,11 @@ sub dispatch {
             (my $err = $@) =~ s/ at .+ line \d+\.?\s*$//;
             return _result($id, {
                 content => [{ type => 'text', text => "Error: $err" }],
-                isError => JSON::XS::true,
+                isError => JSON::true,
             });
         }
         return _result($id, {
-            content => [{ type => 'text', text => encode_json($result) }],
+            content => [{ type => 'text', text => $json->encode($result) }],
         });
     }
 
@@ -73,44 +76,146 @@ sub _error  { my ($id, $c, $m) = @_; return { jsonrpc => '2.0', id => $id, error
 
 sub _tool_definitions {
     return [
-        { name => 'entry_list',   description => '指定ブログの記事一覧を取得する',
-          inputSchema => { type => 'object', required => ['blog_id'],
-            properties => { blog_id => { type => 'integer' }, limit => { type => 'integer' },
-                            status => { type => 'string', enum => ['publish','draft','all'] } } } },
-        { name => 'entry_get',    description => '記事IDを指定して1件取得する',
-          inputSchema => { type => 'object', required => ['entry_id'],
-            properties => { entry_id => { type => 'integer' } } } },
-        { name => 'entry_create', description => '新規記事を作成する（デフォルトは下書き）',
-          inputSchema => { type => 'object', required => ['blog_id','title'],
-            properties => { blog_id => { type => 'integer' }, title => { type => 'string' },
-                            body => { type => 'string' }, status => { type => 'string', enum => ['publish','draft'] },
-                            category_ids => { type => 'array', items => { type => 'integer' } } } } },
-        { name => 'entry_update', description => '既存記事を更新する',
-          inputSchema => { type => 'object', required => ['entry_id'],
-            properties => { entry_id => { type => 'integer' }, title => { type => 'string' },
-                            body => { type => 'string' }, status => { type => 'string', enum => ['publish','draft'] } } } },
-        { name => 'category_list', description => '指定ブログのカテゴリ一覧を取得する',
-          inputSchema => { type => 'object', required => ['blog_id'],
-            properties => { blog_id => { type => 'integer' } } } },
-        { name => 'tag_list',      description => '指定ブログのタグ一覧を取得する',
-          inputSchema => { type => 'object', required => ['blog_id'],
-            properties => { blog_id => { type => 'integer' } } } },
-        { name => 'asset_list',    description => '指定ブログのアセット一覧を取得する',
-          inputSchema => { type => 'object', required => ['blog_id'],
-            properties => { blog_id => { type => 'integer' }, limit => { type => 'integer' },
-                            class => { type => 'string' } } } },
-        { name => 'asset_get',     description => 'アセットIDを指定して1件取得する',
-          inputSchema => { type => 'object', required => ['asset_id'],
-            properties => { asset_id => { type => 'integer' } } } },
-        { name => 'template_list', description => '指定ブログのテンプレート一覧を取得する',
-          inputSchema => { type => 'object', required => ['blog_id'],
-            properties => { blog_id => { type => 'integer' }, type => { type => 'string' } } } },
-        { name => 'template_get',  description => 'テンプレートIDを指定して1件取得する（本文含む）',
-          inputSchema => { type => 'object', required => ['template_id'],
-            properties => { template_id => { type => 'integer' } } } },
-        { name => 'template_update', description => 'テンプレートの本文を更新する',
-          inputSchema => { type => 'object', required => ['template_id','body'],
-            properties => { template_id => { type => 'integer' }, body => { type => 'string' } } } },
+        {
+            name        => 'blog_list',
+            description => 'Movable Type のブログ（サイト）一覧を取得する。blog_id が不明なときは必ずこのツールで確認してから操作すること。',
+            inputSchema => { type => 'object', properties => {} },
+        },
+        {
+            name        => 'entry_list',
+            description => '指定ブログの記事一覧を取得する。blog_id が不明なら先に blog_list を呼ぶこと。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id'],
+                properties => {
+                    blog_id => { type => 'integer', description => 'ブログID（blog_list で確認）' },
+                    limit   => { type => 'integer', description => '取得件数（デフォルト20）' },
+                    status  => { type => 'string', enum => ['publish','draft','all'], description => '記事ステータス' },
+                },
+            },
+        },
+        {
+            name        => 'entry_get',
+            description => '記事IDを指定して1件の記事を本文ごと取得する。',
+            inputSchema => {
+                type     => 'object',
+                required => ['entry_id'],
+                properties => {
+                    entry_id => { type => 'integer', description => '記事ID' },
+                },
+            },
+        },
+        {
+            name        => 'entry_create',
+            description => '新規記事を作成する。blog_id が不明なら先に blog_list を呼ぶこと。カテゴリを指定したい場合は先に category_list で ID を確認すること。status を省略すると下書きになる。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id', 'title'],
+                properties => {
+                    blog_id      => { type => 'integer', description => 'ブログID（blog_list で確認）' },
+                    title        => { type => 'string',  description => '記事タイトル' },
+                    body         => { type => 'string',  description => '記事本文（HTML可）' },
+                    status       => { type => 'string',  enum => ['publish','draft'], description => '省略時は draft（下書き）' },
+                    category_ids => { type => 'array', items => { type => 'integer' }, description => 'カテゴリIDの配列（category_list で確認）' },
+                    author_id    => { type => 'integer', description => '著者ユーザーID（省略時は管理者ユーザー）' },
+                },
+            },
+        },
+        {
+            name        => 'entry_update',
+            description => '既存の記事を更新する。指定したフィールドのみ上書きされる。',
+            inputSchema => {
+                type     => 'object',
+                required => ['entry_id'],
+                properties => {
+                    entry_id => { type => 'integer', description => '更新する記事のID' },
+                    title    => { type => 'string',  description => '新しいタイトル' },
+                    body     => { type => 'string',  description => '新しい本文' },
+                    status   => { type => 'string',  enum => ['publish','draft'], description => '新しいステータス' },
+                },
+            },
+        },
+        {
+            name        => 'category_list',
+            description => '指定ブログのカテゴリ一覧を取得する。entry_create でカテゴリを指定する前に呼ぶこと。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id'],
+                properties => {
+                    blog_id => { type => 'integer', description => 'ブログID' },
+                },
+            },
+        },
+        {
+            name        => 'tag_list',
+            description => '指定ブログで使われているタグ一覧を取得する。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id'],
+                properties => {
+                    blog_id => { type => 'integer', description => 'ブログID' },
+                },
+            },
+        },
+        {
+            name        => 'asset_list',
+            description => '指定ブログのアセット（画像・ファイルなど）一覧を取得する。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id'],
+                properties => {
+                    blog_id => { type => 'integer', description => 'ブログID' },
+                    limit   => { type => 'integer' },
+                    class   => { type => 'string',  description => 'image / file など' },
+                },
+            },
+        },
+        {
+            name        => 'asset_get',
+            description => 'アセットIDを指定して1件取得する。',
+            inputSchema => {
+                type     => 'object',
+                required => ['asset_id'],
+                properties => {
+                    asset_id => { type => 'integer', description => 'アセットID' },
+                },
+            },
+        },
+        {
+            name        => 'template_list',
+            description => '指定ブログのテンプレート一覧を取得する。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id'],
+                properties => {
+                    blog_id => { type => 'integer', description => 'ブログID' },
+                    type    => { type => 'string',  description => 'テンプレートタイプ（index, individual など）' },
+                },
+            },
+        },
+        {
+            name        => 'template_get',
+            description => 'テンプレートIDを指定して本文ごと取得する。',
+            inputSchema => {
+                type     => 'object',
+                required => ['template_id'],
+                properties => {
+                    template_id => { type => 'integer', description => 'テンプレートID' },
+                },
+            },
+        },
+        {
+            name        => 'template_update',
+            description => 'テンプレートの本文を更新する。',
+            inputSchema => {
+                type     => 'object',
+                required => ['template_id', 'body'],
+                properties => {
+                    template_id => { type => 'integer', description => 'テンプレートID' },
+                    body        => { type => 'string',  description => '新しいテンプレート本文' },
+                },
+            },
+        },
     ];
 }
 

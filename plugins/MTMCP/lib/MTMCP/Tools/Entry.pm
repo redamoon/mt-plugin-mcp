@@ -33,7 +33,12 @@ sub create {
     $entry->title($title);
     $entry->text($args->{body} // '');
     $entry->status(($args->{status}//'draft') eq 'publish' ? MT::Entry::RELEASE() : MT::Entry::HOLD());
-    $entry->author_id($app ? $app->user->id : 1);
+    my $author_id = $args->{author_id};
+    unless ($author_id) {
+        my $user = eval { $app->user };
+        $author_id = ($user && $user->id && !$user->is_anonymous) ? $user->id : 1;
+    }
+    $entry->author_id($author_id);
     $entry->save or die $entry->errstr . "\n";
     _set_categories($entry, $args->{category_ids}) if $args->{category_ids};
     return { entry_id => $entry->id, status => 'created', title => $entry->title };

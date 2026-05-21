@@ -22,7 +22,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を直接操�
 ## 動作環境
 
 - Movable Type 9
-- Apache + mod_perl
+- Apache + mod_perl または CGI
 
 ## インストール
 
@@ -35,10 +35,18 @@ cp -r plugins/MTMCP /path/to/mt/plugins/
 1. MT 管理画面 > システム > プラグイン > MT MCP Server > 設定
 2. **API Token** に任意のトークン文字列を設定して保存
 
+## Apache 設定
+
+`Authorization` ヘッダーを CGI に渡すため、VirtualHost 設定に以下を追加してください。
+
+```apache
+CGIPassAuth On
+```
+
 ## エンドポイント
 
 ```
-POST https://example.com/mt/mt.cgi/mcp
+POST https://example.com/mt/mt-data-api.cgi/v4/mcp
 ```
 
 ## MCP クライアント設定
@@ -50,7 +58,7 @@ POST https://example.com/mt/mt.cgi/mcp
   "mcpServers": {
     "movable-type": {
       "type": "http",
-      "url": "https://example.com/mt/mt.cgi/mcp",
+      "url": "https://example.com/mt/mt-data-api.cgi/v4/mcp",
       "headers": {
         "Authorization": "Bearer <your-api-token>"
       }
@@ -66,7 +74,7 @@ POST https://example.com/mt/mt.cgi/mcp
   "mcpServers": {
     "movable-type": {
       "type": "http",
-      "url": "https://example.com/mt/mt.cgi/mcp",
+      "url": "https://example.com/mt/mt-data-api.cgi/v4/mcp",
       "headers": {
         "Authorization": "Bearer <your-api-token>"
       }
@@ -78,19 +86,15 @@ POST https://example.com/mt/mt.cgi/mcp
 ## 疎通確認
 
 ```bash
-curl -X POST https://example.com/mt/mt.cgi/mcp \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <your-api-token>" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "initialize",
-    "params": {
-      "protocolVersion": "2024-11-05",
-      "capabilities": {},
-      "clientInfo": { "name": "curl", "version": "0.0.1" }
-    }
-  }'
+curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <your-api-token>' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl","version":"0.0.1"}}}'
+```
+
+成功時のレスポンス例:
+```json
+{"id":1,"jsonrpc":"2.0","result":{"capabilities":{"tools":{"listChanged":false}},"protocolVersion":"2024-11-05","serverInfo":{"name":"MT MCP Server","version":"0.1.0"}}}
 ```
 
 ## ディレクトリ構成

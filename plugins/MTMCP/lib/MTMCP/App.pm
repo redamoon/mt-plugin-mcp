@@ -1,25 +1,27 @@
 package MTMCP::App;
 use strict;
 use warnings;
-use JSON::XS;
+use JSON;
 
-my $json = JSON::XS->new->utf8->canonical;
+my $json = JSON->new->utf8->canonical;
 
 sub handle {
-    my ($app) = @_;
+    my ($app, $endpoint) = @_;
 
     unless ($app->request_method eq 'POST') {
         return _respond($app, 405, { error => 'Method Not Allowed' });
     }
 
-    my $ct = $app->request->content_type // '';
+    my $ct = $app->get_header('Content-Type') // $ENV{CONTENT_TYPE} // '';
     unless ($ct =~ m{application/json}i) {
         return _respond($app, 415, { error => 'Content-Type must be application/json' });
     }
 
-    my $auth = $app->request->header('Authorization') // '';
+    my $auth = $app->get_header('Authorization')
+            // $ENV{REDIRECT_HTTP_AUTHORIZATION}
+            // '';
     unless ($auth =~ /^Bearer\s+(.+)$/i) {
-        $app->response->header('WWW-Authenticate' => 'Bearer realm="MT MCP"');
+        $app->set_header('WWW-Authenticate' => 'Bearer realm="MT MCP"');
         return _respond($app, 401, { error => 'Unauthorized' });
     }
     my $provided_token = $1;
@@ -31,7 +33,7 @@ sub handle {
         return _respond($app, 401, { error => 'Invalid token' });
     }
 
-    my $body = $app->request->content // '';
+    my $body = $app->param('POSTDATA') // $app->request_content // '';
     my $req  = eval { $json->decode($body) };
     if ($@) {
         return _respond($app, 400, {
@@ -45,7 +47,7 @@ sub handle {
     my $response = MTMCP::Protocol::dispatch($app, $req);
 
     unless (defined $response) {
-        $app->response->status(204);
+        $app->response_code(204);
         return '';
     }
 
@@ -54,8 +56,8 @@ sub handle {
 
 sub _respond {
     my ($app, $status, $data) = @_;
-    $app->response->status($status);
-    $app->response->header('Content-Type' => 'application/json; charset=UTF-8');
+    $app->response_code($status);
+    $app->set_header('Content-Type' => 'application/json; charset=UTF-8');
     return $json->encode($data);
 }
 

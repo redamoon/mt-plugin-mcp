@@ -16,9 +16,11 @@ settings:
     scope: system
 
 applications:
-  cms:
-    routes:
-      mcp_endpoint:
-        path: /mcp
+  data_api:
+    endpoints:
+      - id: mcp
+        route: /mcp
+        version: 4
+        verb: POST
         handler: $MTMCP::MTMCP::App::handle
         requires_login: 0
