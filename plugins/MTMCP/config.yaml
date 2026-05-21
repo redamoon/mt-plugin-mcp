@@ -8,6 +8,8 @@ description: Movable Type 9 用 MCP (Model Context Protocol) サーバープラ�
 author_name: ''
 author_link: ''
 
+config_template: cfg_plugin.tmpl
+
 settings:
   api_token:
     default: ''
