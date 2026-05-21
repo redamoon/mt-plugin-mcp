@@ -1,11 +1,12 @@
 package MTMCP::Protocol;
 use strict;
 use warnings;
+use utf8;
 use JSON;
 
 our $PROTOCOL_VERSION = '2024-11-05';
 
-my $json = JSON->new->utf8->canonical;
+my $json = JSON->new->ascii->canonical;
 
 my %TOOL_HANDLERS = (
     'blog_list'       => sub { require MTMCP::Tools::Blog;     MTMCP::Tools::Blog::list(@_)         },
@@ -17,9 +18,15 @@ my %TOOL_HANDLERS = (
     'tag_list'        => sub { require MTMCP::Tools::Category; MTMCP::Tools::Category::list_tags(@_)},
     'asset_list'      => sub { require MTMCP::Tools::Asset;    MTMCP::Tools::Asset::list(@_)        },
     'asset_get'       => sub { require MTMCP::Tools::Asset;    MTMCP::Tools::Asset::get(@_)         },
-    'template_list'   => sub { require MTMCP::Tools::Template; MTMCP::Tools::Template::list(@_)     },
-    'template_get'    => sub { require MTMCP::Tools::Template; MTMCP::Tools::Template::get(@_)      },
-    'template_update' => sub { require MTMCP::Tools::Template; MTMCP::Tools::Template::update(@_)   },
+    'template_list'        => sub { require MTMCP::Tools::Template;     MTMCP::Tools::Template::list(@_)         },
+    'template_get'         => sub { require MTMCP::Tools::Template;     MTMCP::Tools::Template::get(@_)          },
+    'template_update'      => sub { require MTMCP::Tools::Template;     MTMCP::Tools::Template::update(@_)       },
+    'content_type_list'    => sub { require MTMCP::Tools::ContentType;  MTMCP::Tools::ContentType::list(@_)      },
+    'content_type_get'     => sub { require MTMCP::Tools::ContentType;  MTMCP::Tools::ContentType::get(@_)       },
+    'content_data_list'    => sub { require MTMCP::Tools::ContentData;  MTMCP::Tools::ContentData::list(@_)      },
+    'content_data_get'     => sub { require MTMCP::Tools::ContentData;  MTMCP::Tools::ContentData::get(@_)       },
+    'content_data_create'  => sub { require MTMCP::Tools::ContentData;  MTMCP::Tools::ContentData::create(@_)    },
+    'content_data_update'  => sub { require MTMCP::Tools::ContentData;  MTMCP::Tools::ContentData::update(@_)    },
 );
 
 sub dispatch {
@@ -213,6 +220,81 @@ sub _tool_definitions {
                 properties => {
                     template_id => { type => 'integer', description => 'テンプレートID' },
                     body        => { type => 'string',  description => '新しいテンプレート本文' },
+                },
+            },
+        },
+        {
+            name        => 'content_type_list',
+            description => '指定ブログのコンテンツタイプ一覧を取得する。content_data_* 操作の前に呼んで content_type_id を確認すること。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id'],
+                properties => {
+                    blog_id => { type => 'integer', description => 'ブログID（blog_list で確認）' },
+                },
+            },
+        },
+        {
+            name        => 'content_type_get',
+            description => 'コンテンツタイプの詳細（フィールド定義一覧）を取得する。content_data_create/update でフィールドIDを確認するために使う。',
+            inputSchema => {
+                type     => 'object',
+                required => ['content_type_id'],
+                properties => {
+                    content_type_id => { type => 'integer', description => 'コンテンツタイプID（content_type_list で確認）' },
+                },
+            },
+        },
+        {
+            name        => 'content_data_list',
+            description => '指定コンテンツタイプのコンテンツデータ一覧を取得する。',
+            inputSchema => {
+                type     => 'object',
+                required => ['content_type_id'],
+                properties => {
+                    content_type_id => { type => 'integer', description => 'コンテンツタイプID' },
+                    blog_id         => { type => 'integer', description => 'ブログID（省略可）' },
+                    limit           => { type => 'integer', description => '取得件数（デフォルト20）' },
+                    status          => { type => 'string',  enum => ['publish','draft','all'], description => 'ステータス' },
+                },
+            },
+        },
+        {
+            name        => 'content_data_get',
+            description => 'コンテンツデータIDを指定して1件取得する。フィールド値と各フィールドのラベルも返す。',
+            inputSchema => {
+                type     => 'object',
+                required => ['content_data_id'],
+                properties => {
+                    content_data_id => { type => 'integer', description => 'コンテンツデータID' },
+                },
+            },
+        },
+        {
+            name        => 'content_data_create',
+            description => 'コンテンツデータを新規作成する。事前に content_type_get でフィールドIDを確認すること。fields のキーはフィールドID（整数を文字列化）。',
+            inputSchema => {
+                type     => 'object',
+                required => ['content_type_id', 'blog_id'],
+                properties => {
+                    content_type_id => { type => 'integer', description => 'コンテンツタイプID' },
+                    blog_id         => { type => 'integer', description => 'ブログID' },
+                    status          => { type => 'string',  enum => ['publish','draft'], description => '省略時は draft' },
+                    fields          => { type => 'object',  description => 'フィールドID => 値 のオブジェクト（例: {"1": "テキスト", "2": "値"}）' },
+                    author_id       => { type => 'integer', description => '著者ユーザーID（省略時は管理者）' },
+                },
+            },
+        },
+        {
+            name        => 'content_data_update',
+            description => '既存のコンテンツデータを更新する。fields は指定したフィールドのみ上書き（未指定フィールドは保持）。',
+            inputSchema => {
+                type     => 'object',
+                required => ['content_data_id'],
+                properties => {
+                    content_data_id => { type => 'integer', description => '更新するコンテンツデータID' },
+                    status          => { type => 'string',  enum => ['publish','draft'], description => '新しいステータス' },
+                    fields          => { type => 'object',  description => 'フィールドID => 値 のオブジェクト（部分更新可）' },
                 },
             },
         },

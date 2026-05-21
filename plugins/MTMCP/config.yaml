@@ -24,3 +24,9 @@ applications:
         verb: POST
         handler: $MTMCP::MTMCP::App::handle
         requires_login: 0
+      - id: mcp_sse
+        route: /mcp
+        version: 4
+        verb: GET
+        handler: $MTMCP::MTMCP::App::handle_sse
+        requires_login: 0
