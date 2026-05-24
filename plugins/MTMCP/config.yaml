@@ -30,3 +30,9 @@ applications:
         verb: GET
         handler: $MTMCP::MTMCP::App::handle_sse
         requires_login: 0
+      - id: mcp_options
+        route: /mcp
+        version: 4
+        verb: OPTIONS
+        handler: $MTMCP::MTMCP::App::handle_options
+        requires_login: 0

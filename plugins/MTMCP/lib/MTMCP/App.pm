@@ -2,6 +2,7 @@ package MTMCP::App;
 use strict;
 use warnings;
 use JSON;
+use Digest::SHA qw(sha256_hex);
 
 my $json = JSON->new->ascii->canonical;
 
@@ -34,11 +35,19 @@ sub handle {
     my $response = MTMCP::Protocol::dispatch($app, $req);
 
     unless (defined $response) {
+        _set_cors_headers($app);
         $app->response_code(204);
         return '';
     }
 
     return _respond($app, 200, $response);
+}
+
+sub handle_options {
+    my ($app) = @_;
+    _set_cors_headers($app);
+    $app->response_code(204);
+    return '';
 }
 
 # SSE endpoint — MCP クライアントが GET で接続し、POST 先 URL を受け取る
@@ -55,11 +64,11 @@ sub handle_sse {
     $script =~ s{/$}{};
     my $post_url = $base . $script . '/v4/mcp';
 
+    _set_cors_headers($app);
     $app->response_code(200);
     $app->set_header('Content-Type'  => 'text/event-stream');
     $app->set_header('Cache-Control' => 'no-cache');
     $app->set_header('Connection'    => 'keep-alive');
-    $app->set_header('Access-Control-Allow-Origin' => '*');
 
     # endpoint イベントを送信（クライアントはこの URL に JSON-RPC を POST する）
     return "event: endpoint\ndata: $post_url\n\n";
@@ -77,14 +86,28 @@ sub _check_auth {
     my $provided_token = $1;
     my $plugin      = MT->component('MTMCP');
     my $valid_token = $plugin->get_config_value('api_token', 'system') // '';
-    unless ($valid_token && $provided_token eq $valid_token) {
+    unless ($valid_token && _secure_compare($provided_token, $valid_token)) {
         return _respond($app, 401, { error => 'Invalid token' });
     }
     return undef;
 }
 
+sub _secure_compare {
+    my ($a, $b) = @_;
+    return sha256_hex($a) eq sha256_hex($b);
+}
+
+sub _set_cors_headers {
+    my ($app) = @_;
+    $app->set_header('Access-Control-Allow-Origin'  => '*');
+    $app->set_header('Access-Control-Allow-Methods' => 'GET, POST, OPTIONS');
+    $app->set_header('Access-Control-Allow-Headers' => 'Authorization, Content-Type');
+    $app->set_header('Access-Control-Max-Age'       => '86400');
+}
+
 sub _respond {
     my ($app, $status, $data) = @_;
+    _set_cors_headers($app);
     $app->response_code($status);
     $app->set_header('Content-Type' => 'application/json; charset=UTF-8');
     return $json->encode($data);
