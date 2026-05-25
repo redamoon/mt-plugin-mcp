@@ -131,21 +131,25 @@ flowchart TD
 
 Apache は `Authorization` ヘッダを CGI に渡す前に剥がす。対応方法は3つ：
 
-| 方法 | サーバ設定 | ヘッダー形式 |
-|------|-----------|-------------|
-| `CGIPassAuth On` | VirtualHost 設定（要権限） | `Authorization: Bearer <token>` |
-| RewriteRule | `.htaccess`（権限低め） | `Authorization: Bearer <token>` |
-| **カスタムヘッダー** | **不要** | `X-MT-Authorization: MTAuth accessToken=<token>` |
+| 方法 | サーバ設定 | ヘッダー形式 | 備考 |
+|------|-----------|-------------|------|
+| `CGIPassAuth On` | VirtualHost 設定（要権限） | `Authorization: Bearer <token>` | **推奨** |
+| RewriteRule | `.htaccess`（権限低め） | `Authorization: Bearer <token>` | **推奨** |
+| カスタムヘッダー | 不要 | `X-MT-Authorization: MTAuth accessToken=<token>` | フォールバック |
 
-### カスタムヘッダーを使う（サーバ設定ゼロ）
+### `Authorization: Bearer` を使う（推奨）
 
-Apache はカスタムヘッダー（`X-*`）を剥がさず CGI の `HTTP_X_MT_AUTHORIZATION` 環境変数として渡す。Cursor など MCP クライアントの設定でカスタムヘッダーを指定できる場合はこちらを推奨。
+設定画面で発行したトークンを MCP クライアントの `headers` に指定する。Apache が `Authorization` ヘッダーを CGI に渡すよう設定が必要。
+
+### カスタムヘッダーを使う（Apache 設定不要のフォールバック）
+
+Apache はカスタムヘッダー（`X-*`）を剥がさず CGI の `HTTP_X_MT_AUTHORIZATION` 環境変数として渡す。サーバ設定を変更できない場合のフォールバックとして利用可能。
 
 ```
 X-MT-Authorization: MTAuth accessToken=<accessToken>
 ```
 
-### `Authorization: Bearer` を使う（.htaccess で対応）
+### `.htaccess` で Bearer を通す
 
 ```apache
 RewriteEngine On

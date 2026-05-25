@@ -52,7 +52,7 @@
             if (data.token) {
                 document.getElementById('mtmcp-token-value').value = data.token;
                 document.getElementById('mtmcp-config-example').textContent =
-                    '"X-MT-Authorization": "MTAuth accessToken=' + data.token + '"';
+                    '"Authorization": "Bearer ' + data.token + '"';
                 document.getElementById('mtmcp-result').style.display = 'block';
             } else {
                 document.getElementById('mtmcp-error').textContent = data.error || 'エラーが発生しました';

@@ -154,7 +154,7 @@ MT 管理画面で **システム > プラグイン > MT MCP Server** を開き�
 ```bash
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -H 'Content-Type: application/json' \
-  -H 'X-MT-Authorization: MTAuth accessToken=<your-token>' \
+  -H 'Authorization: Bearer <your-token>' \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl","version":"0.0.1"}}}'
 ```
 
@@ -168,7 +168,7 @@ curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
 ```bash
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -H 'Content-Type: application/json' \
-  -H 'X-MT-Authorization: MTAuth accessToken=<your-token>' \
+  -H 'Authorization: Bearer <your-token>' \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 ```
 
@@ -177,7 +177,7 @@ curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
 ```bash
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -H 'Content-Type: application/json' \
-  -H 'X-MT-Authorization: MTAuth accessToken=<your-token>' \
+  -H 'Authorization: Bearer <your-token>' \
   -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"blog_list","arguments":{}}}'
 ```
 
@@ -186,7 +186,7 @@ curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
 ```bash
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -H 'Content-Type: application/json' \
-  -H 'X-MT-Authorization: MTAuth accessToken=<your-token>' \
+  -H 'Authorization: Bearer <your-token>' \
   -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"entry_create","arguments":{"blog_id":1,"title":"テスト記事","body":"本文です。","status":"draft"}}}'
 ```
 
@@ -196,19 +196,19 @@ curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
 # 1. コンテンツタイプ一覧でIDを確認
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -H 'Content-Type: application/json' \
-  -H 'X-MT-Authorization: MTAuth accessToken=<your-token>' \
+  -H 'Authorization: Bearer <your-token>' \
   -d '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"content_type_list","arguments":{"blog_id":1}}}'
 
 # 2. フィールドID確認
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -H 'Content-Type: application/json' \
-  -H 'X-MT-Authorization: MTAuth accessToken=<your-token>' \
+  -H 'Authorization: Bearer <your-token>' \
   -d '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"content_type_get","arguments":{"content_type_id":1}}}'
 
 # 3. データ作成
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -H 'Content-Type: application/json' \
-  -H 'X-MT-Authorization: MTAuth accessToken=<your-token>' \
+  -H 'Authorization: Bearer <your-token>' \
   -d '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"content_data_create","arguments":{"content_type_id":1,"blog_id":1,"status":"draft","fields":{"1":"タイトル","2":"本文"}}}}'
 ```
 
