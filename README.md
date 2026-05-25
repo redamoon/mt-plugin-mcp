@@ -60,66 +60,44 @@ AI:       content_type_list → content_type_id を確認
 - Apache 2.4+ (CGI または mod_perl)
 - Perl 5.x (`JSON` モジュール)
 
-## インストール
+## セットアップ
+
+### 1. プラグインをインストール
 
 ```bash
 cp -r plugins/MTMCP /path/to/mt/plugins/
 ```
 
-## 設定
+MT を再起動（または `touch mt.cgi`）してプラグインを有効化します。
 
-### 1. API トークンの設定
+### 2. Apache の設定
 
-MT 管理画面 > システム > プラグイン > **MT MCP Server** > 設定  
-**API Token** に任意のトークン文字列を入力して保存します。
+`Authorization` ヘッダーを CGI に渡すために以下いずれかが必要です。
 
-### 2. Apache 設定
-
-`Authorization` ヘッダーを CGI に渡すために `CGIPassAuth On` が必要です。  
-VirtualHost の `<Directory>` ブロックに追加してください。
-
+**方法 A: VirtualHost / Directory ブロックに追記**
 ```apache
 <Directory "/var/www/html/mt">
     CGIPassAuth On
-    # ...既存の設定...
 </Directory>
 ```
 
-## エンドポイント
-
-MT の Data API 経由でリクエストを受け付けます。
-
-| メソッド | パス | 役割 |
-|---|---|---|
-| `GET` | `/mt-data-api.cgi/v4/mcp` | SSE 接続（クライアントが POST 先 URL を受け取る） |
-| `POST` | `/mt-data-api.cgi/v4/mcp` | JSON-RPC リクエストの送受信 |
-
-| ヘッダー | 値 |
-|---|---|
-| `Content-Type` | `application/json` |
-| `Authorization` | `Bearer <api-token>` |
-
-## MCP クライアント設定
-
-### Cursor (`~/.cursor/mcp.json`)
-
-```json
-{
-  "mcpServers": {
-    "movable-type": {
-      "type": "http",
-      "url": "https://example.com/mt/mt-data-api.cgi/v4/mcp",
-      "headers": {
-        "Authorization": "Bearer <your-api-token>"
-      }
-    }
-  }
-}
+**方法 B: `.htaccess` に追記**（サーバ設定を変更できない場合）
+```apache
+RewriteEngine On
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 ```
 
-### Claude Desktop (`claude_desktop_config.json`)
+### 3. アクセストークンを発行
 
-Claude Desktop は SSE トランスポートを使用します。
+MT 管理画面 > システム > プラグイン > **MT MCP Server** > 設定
+
+「トークンを発行する」ボタンを押すとトークンが表示されます。コピーして次のステップで使います。
+
+> トークンの有効期限は 7 日間です。期限切れの場合は同じ手順で再発行してください。
+
+### 4. MCP クライアントを設定
+
+#### Cursor (`~/.cursor/mcp.json`)
 
 ```json
 {
@@ -128,12 +106,42 @@ Claude Desktop は SSE トランスポートを使用します。
       "type": "sse",
       "url": "https://example.com/mt/mt-data-api.cgi/v4/mcp",
       "headers": {
-        "Authorization": "Bearer <your-api-token>"
+        "Authorization": "Bearer <発行したトークン>"
       }
     }
   }
 }
 ```
+
+#### Claude Desktop (`claude_desktop_config.json`)
+
+```json
+{
+  "mcpServers": {
+    "movable-type": {
+      "type": "sse",
+      "url": "https://example.com/mt/mt-data-api.cgi/v4/mcp",
+      "headers": {
+        "Authorization": "Bearer <発行したトークン>"
+      }
+    }
+  }
+}
+```
+
+## エンドポイント
+
+| メソッド | パス | 役割 |
+|---|---|---|
+| `GET` | `/mt-data-api.cgi/v4/mcp` | SSE 接続（クライアントが POST 先 URL を受け取��） |
+| `POST` | `/mt-data-api.cgi/v4/mcp` | JSON-RPC リクエストの送受信 |
+
+認証ヘッダー（いずれか）：
+
+| ヘッダー | 値 | Apache 設定 | 備考 |
+|---|---|---|---|
+| `Authorization` | `Bearer <token>` | `CGIPassAuth On` または RewriteRule が必要 | Cursor / Claude Desktop で動作確認済 |
+| `X-MT-Authorization` | `MTAuth accessToken=<token>` | 不要 | Apache 設定変更できない環境向け |
 
 ## 疎通確認
 
@@ -142,7 +150,7 @@ Claude Desktop は SSE トランスポートを使用します。
 ```bash
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer <your-api-token>' \
+  -H 'X-MT-Authorization: MTAuth accessToken=<your-token>' \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl","version":"0.0.1"}}}'
 ```
 
@@ -156,7 +164,7 @@ curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
 ```bash
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer <your-api-token>' \
+  -H 'X-MT-Authorization: MTAuth accessToken=<your-token>' \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 ```
 
@@ -165,7 +173,7 @@ curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
 ```bash
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer <your-api-token>' \
+  -H 'X-MT-Authorization: MTAuth accessToken=<your-token>' \
   -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"blog_list","arguments":{}}}'
 ```
 
@@ -174,7 +182,7 @@ curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
 ```bash
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer <your-api-token>' \
+  -H 'X-MT-Authorization: MTAuth accessToken=<your-token>' \
   -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"entry_create","arguments":{"blog_id":1,"title":"テスト記事","body":"本文です。","status":"draft"}}}'
 ```
 
@@ -184,19 +192,19 @@ curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
 # 1. コンテンツタイプ一覧でIDを確認
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer <your-api-token>' \
+  -H 'X-MT-Authorization: MTAuth accessToken=<your-token>' \
   -d '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"content_type_list","arguments":{"blog_id":1}}}'
 
 # 2. フィールドID確認
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer <your-api-token>' \
+  -H 'X-MT-Authorization: MTAuth accessToken=<your-token>' \
   -d '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"content_type_get","arguments":{"content_type_id":1}}}'
 
 # 3. データ作成
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer <your-api-token>' \
+  -H 'X-MT-Authorization: MTAuth accessToken=<your-token>' \
   -d '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"content_data_create","arguments":{"content_type_id":1,"blog_id":1,"status":"draft","fields":{"1":"タイトル","2":"本文"}}}}'
 ```
 
@@ -223,7 +231,7 @@ plugins/MTMCP/
 
 | 症状 | 原因 | 対処 |
 |---|---|---|
-| `401 Unauthorized` | Apache が Authorization ヘッダーを CGI に渡していない | `CGIPassAuth On` を追加 |
+| `401 Unauthorized` | トークンが無効または期限切れ | MT 管理画面でトークンを再発行 |
 | `SSE error: Non-200 status code (404)` | GET エンドポイントが未登録（旧バージョン） | プラグインを最新版に更新し MT を再起動 |
 | ツール説明が文字化けする | JSON エンコーダの設定不備（旧バージョン） | プラグインを最新版に更新し MT を再起動 |
 | `Unknown endpoint` | プラグインのキャッシュが古い | MT 管理画面でプラグインを無効→有効に切り替え |

@@ -2,7 +2,6 @@ package MTMCP::App;
 use strict;
 use warnings;
 use JSON;
-use Digest::SHA qw(sha256_hex);
 
 my $json = JSON->new->ascii->canonical;
 
@@ -76,25 +75,40 @@ sub handle_sse {
 
 sub _check_auth {
     my ($app) = @_;
+
+    my $token;
+
+    # 優先: Authorization: Bearer <token>  (CGIPassAuth or RewriteRule が必要)
     my $auth = $app->get_header('Authorization')
             // $ENV{REDIRECT_HTTP_AUTHORIZATION}
             // '';
-    unless ($auth =~ /^Bearer\s+(.+)$/i) {
+    if ($auth =~ /^Bearer\s+(.+)$/i) {
+        $token = $1;
+    }
+
+    # フォールバック: X-MT-Authorization: MTAuth accessToken=<token>
+    # Apache がカスタムヘッダーをそのまま CGI に渡すため設定不要
+    unless ($token) {
+        my $mt_auth = $app->get_header('X-MT-Authorization') // '';
+        if ($mt_auth =~ /MTAuth\s+accessToken=(\S+)/i) {
+            $token = $1;
+        }
+    }
+
+    unless ($token) {
         $app->set_header('WWW-Authenticate' => 'Bearer realm="MT MCP"');
         return _respond($app, 401, { error => 'Unauthorized' });
     }
-    my $provided_token = $1;
-    my $plugin      = MT->component('MTMCP');
-    my $valid_token = $plugin->get_config_value('api_token', 'system') // '';
-    unless ($valid_token && _secure_compare($provided_token, $valid_token)) {
+
+    require MT::Session;
+    my $session = MT::Session->load($token);
+    unless ($session && $session->kind eq 'DA') {
         return _respond($app, 401, { error => 'Invalid token' });
     }
+    if ($session->start + $session->duration < time()) {
+        return _respond($app, 401, { error => 'Token expired' });
+    }
     return undef;
-}
-
-sub _secure_compare {
-    my ($a, $b) = @_;
-    return sha256_hex($a) eq sha256_hex($b);
 }
 
 sub _set_cors_headers {

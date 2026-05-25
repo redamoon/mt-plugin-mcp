@@ -2,9 +2,25 @@
 
 ## 概要
 
-MCP クライアント（Claude Desktop など）が Movable Type に接続する際の認証・通信フローを示す。
+MCP クライアント（Claude Desktop / Cursor など）が Movable Type に接続する際の認証・通信フロー。
 
-認証方式は **Bearer トークン（静的）** のみ。トークンはプラグイン設定画面（システム管理 > プラグイン > MT MCP Server）で発行し、`Authorization: Bearer <token>` ヘッダとして毎リクエストに付与する。
+認証方式は **MT Data API セッショントークン**。MT 管理画面と同じアカウントで `/v4/authentication` にログインして取得した `accessToken` を `Authorization: Bearer <accessToken>` として渡す。静的トークンの管理は不要。
+
+---
+
+## トークン取得フロー（初回のみ）
+
+```mermaid
+sequenceDiagram
+    participant C  as MCP Client / Cursor
+    participant MT as mt-data-api.cgi
+
+    C->>MT: POST /mt-data-api.cgi/v4/authentication<br/>Content-Type: application/x-www-form-urlencoded<br/>Body: username=...&password=...&clientId=cursor
+    MT-->>C: 200 {"accessToken":"xxxxx","expiresIn":604800,...}
+    Note over C: accessToken を保存し Bearer として使い回す
+```
+
+`expiresIn` は秒単位（デフォルト 7 日）。期限切れ後は再度 `/v4/authentication` で取得する。
 
 ---
 
@@ -26,11 +42,12 @@ package "Movable Type (Web Server)" {
   package "MT Data API" {
     [mt-data-api.cgi] as cgi
     [Endpoint Router\n(config.yaml)] as router
+    [/v4/authentication] as authn_ep
   }
 
   package "MTMCP Plugin" {
     [App.pm\nhandle / handle_sse] as app
-    [_check_auth()\nBearer 検証] as auth
+    [_check_auth()\nSession 検証] as auth
     [Protocol.pm\ndispatch()] as protocol
 
     package "Tools" {
@@ -41,15 +58,16 @@ package "Movable Type (Web Server)" {
     }
   }
 
-  database "Plugin Config\n(api_token)" as config
+  database "mt_session\n(kind=DA)" as session_db
   database "MT Database" as db
 }
 
-client --> cgi : HTTP (GET/POST)\nAuthorization: Bearer <token>
+client --> authn_ep : POST username/password → accessToken
+client --> cgi : HTTP (GET/POST)\nAuthorization: Bearer <accessToken>
 cgi --> router : ルーティング
 router --> app : GET  → handle_sse\nPOST → handle
 app --> auth : _check_auth()
-auth --> config : get_config_value('api_token')
+auth --> session_db : MT::Session->load(token)\nkind=='DA' & 期限チェック
 auth --> app : OK / 401
 app --> protocol : dispatch(req)
 protocol --> tools_entry
@@ -66,78 +84,25 @@ tools_ct --> db
 
 ---
 
-## SSE 接続フロー（初回接続）
-
-MCP クライアントは最初に GET で SSE エンドポイントへ接続し、POST 先 URL を受け取る。
+## SSE 接続フロー
 
 ```mermaid
 sequenceDiagram
     participant C  as MCP Client
     participant MT as mt-data-api.cgi
     participant A  as App.pm
-    participant CF as Plugin Config<br/>(api_token)
+    participant S  as mt_session (DB)
 
-    C->>MT: GET /mt-data-api.cgi/v4/mcp<br/>Authorization: Bearer <token>
+    C->>MT: GET /mt-data-api.cgi/v4/mcp<br/>Authorization: Bearer <accessToken>
     MT->>A: handle_sse()
     A->>A: _check_auth()
-    A->>CF: get_config_value('api_token')
-    CF-->>A: stored_token
+    A->>S: MT::Session->load(token)
+    S-->>A: session (kind=DA)
 
-    alt トークン一致
+    alt 有効なセッション
         A-->>C: 200 text/event-stream<br/>event: endpoint<br/>data: https://.../v4/mcp
-        Note over C: POST 先 URL を取得
-    else トークン不一致 / 未設定
-        A-->>C: 401 Unauthorized<br/>WWW-Authenticate: Bearer realm="MT MCP"
-    end
-```
-
----
-
-## JSON-RPC リクエストフロー（MCP プロトコル）
-
-SSE で取得した URL に対して MCP の JSON-RPC 2.0 メッセージを POST する。
-
-```mermaid
-sequenceDiagram
-    participant C  as MCP Client
-    participant MT as mt-data-api.cgi
-    participant A  as App.pm
-    participant CF as Plugin Config<br/>(api_token)
-    participant P  as Protocol.pm
-    participant T  as Tool Handler<br/>(Entry / Blog / ...)
-    participant DB as MT Database
-
-    C->>MT: POST /mt-data-api.cgi/v4/mcp<br/>Content-Type: application/json<br/>Authorization: Bearer <token><br/>Body: {"jsonrpc":"2.0","method":"..."}
-
-    MT->>A: handle()
-
-    Note over A: Content-Type チェック<br/>（application/json でなければ 415）
-
-    A->>A: _check_auth()
-    A->>CF: get_config_value('api_token')
-    CF-->>A: stored_token
-
-    alt 認証失敗
-        A-->>C: 401 {"error":"Unauthorized"}<br/>or {"error":"Invalid token"}
-    else 認証成功
-        A->>A: JSON デコード
-        A->>P: dispatch(app, req)
-
-        alt method: initialize
-            P-->>C: 200 {protocolVersion, capabilities, serverInfo}
-        else method: tools/list
-            P-->>C: 200 {tools: [...]}
-        else method: tools/call
-            P->>T: handler(app, arguments)
-            T->>DB: MT オブジェクト操作
-            DB-->>T: 結果
-            T-->>P: result
-            P-->>C: 200 {content:[{type:"text", text:"..."}]}
-        else method: ping
-            P-->>C: 200 {}
-        else 未知のメソッド
-            P-->>C: 200 {error:{code:-32601, message:"Method not found"}}
-        end
+    else 無効 / 期限切れ
+        A-->>C: 401 Unauthorized
     end
 ```
 
@@ -151,24 +116,50 @@ flowchart TD
     B -- No --> E1[401 Unauthorized\nWWW-Authenticate: Bearer realm='MT MCP']
     B -- Yes --> C{Bearer スキームか?}
     C -- No --> E1
-    C -- Yes --> D[provided_token を抽出]
-    D --> F[Plugin Config から api_token を取得]
-    F --> G{api_token が設定済み\nかつ provided_token と一致?}
+    C -- Yes --> D[token を抽出]
+    D --> F[MT::Session->load&#40;token&#41;]
+    F --> G{セッションが存在\nかつ kind == 'DA'?}
     G -- No --> E2[401 Invalid token]
-    G -- Yes --> OK[認証成功 → 処理継続]
+    G -- Yes --> H{start + duration >= now?}
+    H -- No --> E3[401 Token expired]
+    H -- Yes --> OK[認証成功 → 処理継続]
 ```
 
-> **注意**: トークンは固定文字列の完全一致比較のみ。有効期限・スコープ・複数トークンの概念はない。
+---
+
+## ヘッダーと Apache の関係
+
+Apache は `Authorization` ヘッダを CGI に渡す前に剥がす。対応方法は3つ：
+
+| 方法 | サーバ設定 | ヘッダー形式 |
+|------|-----------|-------------|
+| `CGIPassAuth On` | VirtualHost 設定（要権限） | `Authorization: Bearer <token>` |
+| RewriteRule | `.htaccess`（権限低め） | `Authorization: Bearer <token>` |
+| **カスタムヘッダー** | **不要** | `X-MT-Authorization: MTAuth accessToken=<token>` |
+
+### カスタムヘッダーを使う（サーバ設定ゼロ）
+
+Apache はカスタムヘッダー（`X-*`）を剥がさず CGI の `HTTP_X_MT_AUTHORIZATION` 環境変数として渡す。Cursor など MCP クライアントの設定でカスタムヘッダーを指定できる場合はこちらを推奨。
+
+```
+X-MT-Authorization: MTAuth accessToken=<accessToken>
+```
+
+### `Authorization: Bearer` を使う（.htaccess で対応）
+
+```apache
+RewriteEngine On
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+```
+
+`App.pm` は `$ENV{REDIRECT_HTTP_AUTHORIZATION}` にフォールバックするため動作する。
 
 ---
 
 ## エンドポイント定義
 
-`config.yaml` で登録される 2 つのエンドポイント：
-
 | verb | route | handler | 用途 |
 |------|-------|---------|------|
 | GET  | `/v4/mcp` | `App::handle_sse` | SSE 接続・POST URL 通知 |
 | POST | `/v4/mcp` | `App::handle` | JSON-RPC 2.0 メッセージ処理 |
-
-いずれも `requires_login: 0`（MT セッション認証は不要）。Bearer トークン認証のみで制御する。
+| OPTIONS | `/v4/mcp` | `App::handle_options` | CORS プリフライト |

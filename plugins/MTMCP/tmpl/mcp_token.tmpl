@@ -1,0 +1,73 @@
+<mt:setvarblock name="page_title">MCP トークン発行</mt:setvarblock>
+
+<mt:include name="header.tmpl">
+
+<div id="main-content" class="inner-content pkg">
+  <div class="content-nav">
+    <h2 class="title">MCP トークン発行</h2>
+    <p class="description">Cursor などの MCP クライアントが MT に接続する際に使用するトークンを発行します。</p>
+  </div>
+
+  <mt:if name="token">
+  <div class="msg msg-success">
+    <p>新しいトークンを発行しました。有効期限は発行から 7 日間です。</p>
+  </div>
+
+  <div class="field-group">
+    <div class="field field-left-label pkg">
+      <div class="field-header">
+        <label>Access Token</label>
+      </div>
+      <div class="field-content">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="text" id="mcp-token-value"
+                 value="<mt:var name="token" escape="html">"
+                 readonly class="full-width"
+                 style="font-family:monospace;" />
+          <button type="button" id="copy-btn" onclick="copyToken()"
+                  class="action-button">コピー</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="field field-left-label pkg">
+      <div class="field-header">
+        <label>Cursor MCP 設定</label>
+      </div>
+      <div class="field-content">
+        <p class="hint">mcp.json の <code>headers</code> に以下を追加してください：</p>
+        <pre style="background:#f5f5f5;padding:12px;border-radius:4px;overflow-x:auto;">{
+  "X-MT-Authorization": "MTAuth accessToken=<mt:var name="token" escape="html">"
+}</pre>
+      </div>
+    </div>
+  </div>
+  </mt:if>
+
+  <form method="post">
+    <input type="hidden" name="__mode" value="mcp_token" />
+    <input type="hidden" name="magic_token" value="<mt:var name="magic_token" escape="html">" />
+    <div class="actions-bar">
+      <button type="submit" class="primary-button">
+        <mt:if name="token">新しいトークンを再発行する<mt:else>トークンを発行する</mt:if>
+      </button>
+    </div>
+    <mt:if name="token">
+    <p class="hint" style="margin-top:8px;">再発行すると以前のトークンは無効になりません（7 日後に自動失効）。</p>
+    </mt:if>
+  </form>
+</div>
+
+<script>
+function copyToken() {
+  var input = document.getElementById('mcp-token-value');
+  input.select();
+  input.setSelectionRange(0, 99999);
+  document.execCommand('copy');
+  var btn = document.getElementById('copy-btn');
+  btn.textContent = 'コピーしました';
+  setTimeout(function() { btn.textContent = 'コピー'; }, 2000);
+}
+</script>
+
+<mt:include name="footer.tmpl">

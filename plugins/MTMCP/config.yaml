@@ -10,12 +10,12 @@ author_link: ''
 
 config_template: cfg_plugin.tmpl
 
-settings:
-  api_token:
-    default: ''
-    scope: system
-
 applications:
+  cms:
+    methods:
+      mcp_token:     $MTMCP::MTMCP::CMS::Token::show
+      gen_mcp_token: $MTMCP::MTMCP::CMS::Token::generate
+
   data_api:
     endpoints:
       - id: mcp

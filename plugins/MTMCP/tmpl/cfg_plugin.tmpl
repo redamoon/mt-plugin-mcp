@@ -1,13 +1,82 @@
 <fieldset>
     <div class="field field-left-label pkg">
         <div class="field-header">
-            <label for="api_token"><__trans phrase="API Token"></label>
+            <label><__trans phrase="MCP トークン"></label>
         </div>
         <div class="field-content">
-            <input type="password" name="api_token" id="api_token"
-                   value="<mt:var name="api_token" escape="html">"
-                   class="full-width" size="60" autocomplete="off" />
-            <p class="hint"><__trans phrase="MCP クライアントが Bearer トークンとして使用するトークン文字列を設定してください。"></p>
+            <button type="button" id="mtmcp-gen-btn" class="btn btn-primary">
+                <__trans phrase="トークンを発行する">
+            </button>
+
+            <div id="mtmcp-result" style="display:none;margin-top:12px;">
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input type="text" id="mtmcp-token-value" readonly class="full-width"
+                           style="font-family:monospace;font-size:12px;" />
+                    <button type="button" id="mtmcp-copy-btn" class="btn btn-default"
+                            onclick="mtmcpCopy()"><__trans phrase="コピー"></button>
+                </div>
+                <p class="hint" style="margin-top:8px;"><__trans phrase="Cursor の mcp.json に追加:"></p>
+                <pre id="mtmcp-config-example"
+                     style="background:#f5f5f5;padding:8px;border-radius:4px;font-size:11px;overflow-x:auto;"></pre>
+            </div>
+
+            <div id="mtmcp-error" style="display:none;color:#c00;margin-top:8px;"></div>
+
+            <p class="hint" style="margin-top:8px;">
+                <__trans phrase="有効期限は発行から 7 日間です。再発行しても以前のトークンは即時無効になりません。">
+            </p>
         </div>
     </div>
 </fieldset>
+
+<script>
+(function () {
+    var scriptUrl = '<mt:var name="script_url" escape="js">';
+
+    document.getElementById('mtmcp-gen-btn').addEventListener('click', function () {
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = '発行中...';
+        document.getElementById('mtmcp-error').style.display = 'none';
+
+        fetch(scriptUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: '__mode=gen_mcp_token'
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.token) {
+                document.getElementById('mtmcp-token-value').value = data.token;
+                document.getElementById('mtmcp-config-example').textContent =
+                    '"X-MT-Authorization": "MTAuth accessToken=' + data.token + '"';
+                document.getElementById('mtmcp-result').style.display = 'block';
+            } else {
+                document.getElementById('mtmcp-error').textContent = data.error || 'エラーが発生しました';
+                document.getElementById('mtmcp-error').style.display = 'block';
+            }
+        })
+        .catch(function () {
+            document.getElementById('mtmcp-error').textContent = 'リクエストに失敗しました';
+            document.getElementById('mtmcp-error').style.display = 'block';
+        })
+        .finally(function () {
+            btn.disabled = false;
+            btn.textContent = 'トークンを発行する';
+        });
+    });
+
+    window.mtmcpCopy = function () {
+        var input = document.getElementById('mtmcp-token-value');
+        input.select();
+        input.setSelectionRange(0, 99999);
+        document.execCommand('copy');
+        var btn = document.getElementById('mtmcp-copy-btn');
+        btn.textContent = 'コピーしました';
+        setTimeout(function () { btn.textContent = 'コピー'; }, 2000);
+    };
+}());
+</script>
