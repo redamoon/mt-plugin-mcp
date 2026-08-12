@@ -134,7 +134,8 @@ sub issue_code {
     return $code;
 }
 
-# POST /v4/mcp/token — 認可コード（+ PKCE code_verifier）をアクセストークンに交換する。
+# POST /v4/mcp/token — 認可コード（+ PKCE code_verifier）またはリフレッシュ
+# トークンを、アクセストークンに交換する。
 sub handle_token {
     my ($app) = @_;
 
@@ -143,11 +144,19 @@ sub handle_token {
     }
 
     my $params = _parse_body($app);
-
     my $grant_type = $params->{grant_type} // '';
-    unless ($grant_type eq 'authorization_code') {
-        return _oauth_error($app, 400, 'unsupported_grant_type', 'Only authorization_code is supported');
+
+    if ($grant_type eq 'authorization_code') {
+        return _handle_authorization_code_grant($app, $params);
     }
+    if ($grant_type eq 'refresh_token') {
+        return _handle_refresh_token_grant($app, $params);
+    }
+    return _oauth_error($app, 400, 'unsupported_grant_type', 'Only authorization_code and refresh_token are supported');
+}
+
+sub _handle_authorization_code_grant {
+    my ($app, $params) = @_;
 
     my $code          = $params->{code};
     my $redirect_uri  = $params->{redirect_uri};
@@ -191,18 +200,65 @@ sub handle_token {
     }
 
     require MTMCP::Auth;
-    my $token = eval { MTMCP::Auth::issue_token_for($author) };
-    unless ($token) {
+    my $token         = eval { MTMCP::Auth::issue_token_for($author) };
+    my $refresh_token = $token && eval { MTMCP::Auth::issue_refresh_token_for($author) };
+    unless ($token && $refresh_token) {
         warn "MTMCP: token issuance failed during OAuth exchange: $@";
         return _oauth_error($app, 500, 'server_error', 'Could not issue access token');
     }
 
     return _respond($app, 200, {
-        access_token => $token,
-        token_type   => 'Bearer',
-        expires_in   => TOKEN_DURATION,
-        user_id      => $author->id,
-        username     => $author->name,
+        access_token  => $token,
+        refresh_token => $refresh_token,
+        token_type    => 'Bearer',
+        expires_in    => TOKEN_DURATION,
+        user_id       => $author->id,
+        username      => $author->name,
+    });
+}
+
+# refresh_token グラント: リフレッシュトークンを新しいアクセストークンに
+# 交換する。使用済みのリフレッシュトークンは即座に無効化し、新しい
+# リフレッシュトークンを発行する（ローテーション。盗用されたトークンの
+# 再利用を検知・遮断しやすくするため）。
+sub _handle_refresh_token_grant {
+    my ($app, $params) = @_;
+
+    my $refresh_token = $params->{refresh_token};
+    unless ($refresh_token) {
+        return _oauth_error($app, 400, 'invalid_request', 'refresh_token is required');
+    }
+
+    require MTMCP::Auth;
+    # resolve_refresh_session は原子的に一度きり消費するため、成功時点で
+    # 既にトークンは無効化されている（ここで remove する必要はない）。
+    my $session = MTMCP::Auth::resolve_refresh_session($refresh_token);
+    unless ($session) {
+        return _oauth_error($app, 400, 'invalid_grant', 'Refresh token is invalid or expired');
+    }
+
+    my $author_id = $session->get('author_id');
+
+    require MT::Author;
+    my $author = $author_id && MT::Author->load($author_id);
+    unless ($author && $author->status == MT::Author::ACTIVE()) {
+        return _oauth_error($app, 400, 'invalid_grant', 'User account is not active');
+    }
+
+    my $token         = eval { MTMCP::Auth::issue_token_for($author) };
+    my $new_refresh   = $token && eval { MTMCP::Auth::issue_refresh_token_for($author) };
+    unless ($token && $new_refresh) {
+        warn "MTMCP: token issuance failed during refresh: $@";
+        return _oauth_error($app, 500, 'server_error', 'Could not issue access token');
+    }
+
+    return _respond($app, 200, {
+        access_token  => $token,
+        refresh_token => $new_refresh,
+        token_type    => 'Bearer',
+        expires_in    => TOKEN_DURATION,
+        user_id       => $author->id,
+        username      => $author->name,
     });
 }
 
@@ -247,7 +303,7 @@ sub handle_register {
         client_id_issued_at          => time(),
         redirect_uris                => $redirect_uris,
         token_endpoint_auth_method   => 'none',
-        grant_types                  => ['authorization_code'],
+        grant_types                  => ['authorization_code', 'refresh_token'],
         response_types               => ['code'],
         client_name                  => $client_name,
     });
@@ -273,7 +329,7 @@ sub _parse_body {
     # 直接取得する。生のリクエストボディを手動で再パースしようとしても、
     # CGI.pm が読み切った後では空になっている。
     my %params;
-    for my $key (qw(grant_type code redirect_uri code_verifier client_id)) {
+    for my $key (qw(grant_type code redirect_uri code_verifier client_id refresh_token)) {
         my $v = $app->param($key);
         $params{$key} = $v if defined $v;
     }
