@@ -1,49 +1,71 @@
+<mt:setvar name="screen_type" value="popup-screen">
+<mt:setvarblock name="html_title">MCPクライアントの認可</mt:setvarblock>
 <mt:setvarblock name="page_title">MCPクライアントの認可</mt:setvarblock>
+<mt:setvar name="complete" value="1">
 
-<mt:include name="header.tmpl">
+<mt:setvarblock name="page_content">
+<div class="row">
+  <div class="col-12">
 
-<div id="main-content" class="inner-content pkg">
-  <div class="content-nav">
-    <h2 class="title">MCPクライアントの認可</h2>
-    <p class="description">
-      <mt:var name="username" escape="html"> としてログイン中です。
-      以下のアプリケーションが、あなたのアカウントで Movable Type を操作することを許可しますか？
-    </p>
-  </div>
+    <p><mt:var name="username" escape="html"> としてログイン中です。</p>
+    <p>以下のアプリケーションが、あなたのアカウントで Movable Type を操作することを許可しますか？</p>
 
-  <div class="field-group">
-    <table class="data-table" style="max-width:640px;">
-      <tr>
-        <th style="width:160px;">Client ID</th>
-        <td><mt:var name="client_id" escape="html"></td>
-      </tr>
-      <tr>
-        <th>リダイレクト先</th>
-        <td style="font-family:monospace;"><mt:var name="redirect_uri" escape="html"></td>
-      </tr>
-    </table>
-    <p class="hint" style="margin-top:12px;">
-      許可すると、このアプリケーションはあなたの MT 権限の範囲内で記事・アセット・
-      テンプレートなどを操作できるようになります。心当たりのないアプリケーションの場合は
-      「拒否する」を選択してください。
-    </p>
-  </div>
-
-  <form method="post">
-    <input type="hidden" name="__mode" value="mcp_authorize_approve" />
-    <input type="hidden" name="magic_token" value="<mt:var name="magic_token" escape="html">" />
-    <input type="hidden" name="response_type" value="<mt:var name="response_type" escape="html">" />
-    <input type="hidden" name="client_id" value="<mt:var name="client_id" escape="html">" />
-    <input type="hidden" name="redirect_uri" value="<mt:var name="redirect_uri" escape="html">" />
-    <input type="hidden" name="state" value="<mt:var name="state" escape="html">" />
-    <input type="hidden" name="code_challenge" value="<mt:var name="code_challenge" escape="html">" />
-    <input type="hidden" name="code_challenge_method" value="<mt:var name="code_challenge_method" escape="html">" />
-
-    <div class="actions-bar">
-      <button type="submit" name="decision" value="approve" class="primary-button">許可する</button>
-      <button type="submit" name="decision" value="deny" class="action-button">拒否する</button>
+    <div class="mt-table--outline">
+      <table class="table mt-table bg-white">
+        <tbody>
+          <tr>
+            <th class="head" scope="row" style="width:160px;">Client ID</th>
+            <td class="col"><mt:var name="client_id" escape="html"></td>
+          </tr>
+          <tr>
+            <th class="head" scope="row">リダイレクト先</th>
+            <td class="col" style="font-family:monospace;"><mt:var name="redirect_uri" escape="html"></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
-  </form>
-</div>
 
-<mt:include name="footer.tmpl">
+    <p class="hint text-muted mt-3">
+      許可すると、このアプリケーションはあなたの MT 権限の範囲内で記事・アセット・テンプレートなどを
+      操作できるようになります。心当たりのないアプリケーションの場合は「拒否する」を選択してください。
+    </p>
+
+    <form method="post" action="<mt:var name="script_url">">
+      <input type="hidden" name="__mode" value="mcp_authorize_approve" />
+      <input type="hidden" name="magic_token" value="<mt:var name="magic_token" escape="html">" />
+      <input type="hidden" name="response_type" value="<mt:var name="response_type" escape="html">" />
+      <input type="hidden" name="client_id" value="<mt:var name="client_id" escape="html">" />
+      <input type="hidden" name="redirect_uri" value="<mt:var name="redirect_uri" escape="html">" />
+      <input type="hidden" name="state" value="<mt:var name="state" escape="html">" />
+      <input type="hidden" name="code_challenge" value="<mt:var name="code_challenge" escape="html">" />
+      <input type="hidden" name="code_challenge_method" value="<mt:var name="code_challenge_method" escape="html">" />
+
+      <mt:setvarblock name="action_buttons">
+        <button
+           type="submit"
+           name="decision"
+           value="approve"
+           accesskey="s"
+           title="許可する (s)"
+           class="btn__mobile btn-primary">
+          許可する
+        </button>
+        <button
+           type="submit"
+           name="decision"
+           value="deny"
+           accesskey="x"
+           title="拒否する (x)"
+           class="btn__mobile btn-default">
+          拒否する
+        </button>
+      </mt:setvarblock>
+      <mt:include name="include/actions_bar.tmpl" bar_position="bottom" hide_pager="1" settings_bar="1">
+    </form>
+
+  </div>
+</div>
+</mt:setvarblock>
+
+<mt:include name="layout/chromeless.tmpl">
+<mt:var name="layout">
