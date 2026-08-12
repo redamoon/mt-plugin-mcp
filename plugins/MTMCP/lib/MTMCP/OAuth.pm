@@ -10,14 +10,28 @@ my $json = JSON->new->ascii->canonical;
 use constant CODE_DURATION  => 600;      # 認可コードの有効期限: 10分
 use constant TOKEN_DURATION => 604800;   # アクセストークンの有効期限: 7日
 
-# ネイティブ／ローカルアプリ向け OAuth のループバックリダイレクト規約（RFC 8252）に従い、
-# http://127.0.0.1:*, http://localhost:*, http://[::1]:* のみを許可する。
-# 外部ホストへのリダイレクトを許可するとオープンリダイレクト・トークン漏えいの
-# 原因になるため、現時点では意図的にこの範囲に限定している。
+# ネイティブ／ローカルアプリ向け OAuth のリダイレクト規約（RFC 8252）に従い、
+# 以下の2パターンのみ許可する。任意の http(s) 外部ホストへのリダイレクトは
+# オープンリダイレクト・トークン漏えいの原因になるため許可しない。
+#
+#   1. ループバックリダイレクト（RFC 8252 §7.3）:
+#      http://127.0.0.1:*, http://localhost:*, http://[::1]:*
+#   2. プライベートスキームリダイレクト（RFC 8252 §7.1）:
+#      Cursor（cursor://...）や Claude Desktop など、OS のカスタムURLスキーム
+#      ハンドラで自アプリに戻ってくる方式。http/https 以外のスキームは
+#      任意のWebサイトには遷移できず、OSに登録された特定アプリにのみ
+#      渡されるため許可する。
 sub is_valid_redirect_uri {
     my ($uri) = @_;
     return 0 unless defined $uri && length $uri;
+
     return 1 if $uri =~ m{^http://(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?(?:/|\?|$)}i;
+
+    if ($uri =~ m{^([a-zA-Z][a-zA-Z0-9+.-]*)://}) {
+        my $scheme = lc $1;
+        return 1 if $scheme ne 'http' && $scheme ne 'https';
+    }
+
     return 0;
 }
 
