@@ -73,7 +73,7 @@ sub issue_code {
     require MT::Session;
     my $session = MT::Session->new;
     $session->id($code);
-    $session->kind('DAC');
+    $session->kind('DC');
     $session->start(time());
     $session->duration(CODE_DURATION);
     $session->set('author_id', $author->id);
@@ -107,7 +107,7 @@ sub handle_token {
     }
 
     require MT::Session;
-    my $session = MT::Session->load({ id => $code, kind => 'DAC' });
+    my $session = MT::Session->load({ id => $code, kind => 'DC' });
 
     unless ($session && $session->start + $session->duration >= time()) {
         $session->remove if $session;

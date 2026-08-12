@@ -107,7 +107,7 @@ sub _fail_key {
 sub _load_fail_record {
     my ($username) = @_;
     require MT::Session;
-    return MT::Session->load({ id => _fail_key($username), kind => 'DAF' });
+    return MT::Session->load({ id => _fail_key($username), kind => 'DF' });
 }
 
 sub _is_locked_out {
@@ -139,7 +139,7 @@ sub _record_failure {
     } else {
         $rec = MT::Session->new;
         $rec->id(_fail_key($username));
-        $rec->kind('DAF');
+        $rec->kind('DF');
         $rec->start($now);
         $rec->duration(FAIL_WINDOW);
         $rec->set('count', 1);
