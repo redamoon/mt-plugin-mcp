@@ -5,31 +5,74 @@ use warnings;
 use constant RELEASE => 2;
 use constant HOLD    => 1;
 
+# キーワード検索時にPerl側でスキャンする最大件数。DB側でのLIKE検索ではなく
+# 直近のレコードをこの件数までロードしてから絞り込むため、これを超えて
+# 古いレコードにしかマッチしないキーワードは検出できない（既知の制約）。
+use constant KEYWORD_SCAN_LIMIT => 2000;
+
 sub list {
     my ($app, $args) = @_;
-    my $ct_id  = $args->{content_type_id} or die "content_type_id is required\n";
-    my $limit  = $args->{limit}  // 20;
-    my $status = $args->{status} // 'publish';
+    my $ct_id   = $args->{content_type_id} or die "content_type_id is required\n";
+    my $limit   = $args->{limit}   // 20;
+    my $offset  = $args->{offset}  // 0;
+    my $status  = $args->{status}  // 'publish';
+    my $keyword = $args->{keyword};
 
     require MT::ContentData;
+    require MTMCP::Perm;
+    my $check_blog_id = $args->{blog_id};
+    unless ($check_blog_id) {
+        require MT::ContentType;
+        my $ct = MT::ContentType->load($ct_id) or die "ContentType not found: $ct_id\n";
+        $check_blog_id = $ct->blog_id;
+    }
+    MTMCP::Perm::require_blog_access($app, $check_blog_id);
+
     my %terms = (content_type_id => $ct_id);
     $terms{blog_id} = $args->{blog_id} if $args->{blog_id};
     $terms{status}  = RELEASE() if $status eq 'publish';
     $terms{status}  = HOLD()    if $status eq 'draft';
 
-    my @cds = MT::ContentData->load(\%terms, {
-        limit     => $limit,
-        sort      => 'authored_on',
-        direction => 'descend',
-    });
+    my %load_opts = ( sort => 'authored_on', direction => 'descend' );
+    if ($keyword) {
+        $load_opts{limit} = KEYWORD_SCAN_LIMIT;
+    } else {
+        $load_opts{limit}  = $limit;
+        $load_opts{offset} = $offset;
+    }
+
+    my @cds = MT::ContentData->load(\%terms, \%load_opts);
+
+    if ($keyword) {
+        my $kw = lc $keyword;
+        @cds = grep {
+            my $data = $_->data // {};
+            grep { defined $_ && index(lc("$_"), $kw) >= 0 } values %$data;
+        } @cds;
+        @cds = splice(@cds, $offset, $limit);
+    }
+
     return [ map { _to_hash($_) } @cds ];
+}
+
+sub remove {
+    my ($app, $args) = @_;
+    my $cd_id = $args->{content_data_id} or die "content_data_id is required\n";
+    require MT::ContentData;
+    require MTMCP::Perm;
+    my $cd = MT::ContentData->load($cd_id) or die "ContentData not found: $cd_id\n";
+    MTMCP::Perm::require_blog_access($app, $cd->blog_id);
+    $cd->remove or die $cd->errstr . "\n";
+    return { content_data_id => $cd_id, status => 'deleted' };
 }
 
 sub get {
     my ($app, $args) = @_;
     my $cd_id = $args->{content_data_id} or die "content_data_id is required\n";
     require MT::ContentData;
+    require MTMCP::Perm;
     my $cd = MT::ContentData->load($cd_id) or die "ContentData not found: $cd_id\n";
+    MTMCP::Perm::require_blog_access($app, $cd->blog_id);
     return _to_hash($cd, 1);
 }
 
@@ -37,6 +80,8 @@ sub create {
     my ($app, $args) = @_;
     my $ct_id   = $args->{content_type_id} or die "content_type_id is required\n";
     my $blog_id = $args->{blog_id}         or die "blog_id is required\n";
+    require MTMCP::Perm;
+    MTMCP::Perm::require_blog_access($app, $blog_id);
 
     require MT::ContentData;
     require MT::ContentType;
@@ -64,7 +109,9 @@ sub update {
     my $cd_id = $args->{content_data_id} or die "content_data_id is required\n";
 
     require MT::ContentData;
+    require MTMCP::Perm;
     my $cd = MT::ContentData->load($cd_id) or die "ContentData not found: $cd_id\n";
+    MTMCP::Perm::require_blog_access($app, $cd->blog_id);
 
     if (defined $args->{status}) {
         $cd->status($args->{status} eq 'publish' ? RELEASE() : HOLD());
