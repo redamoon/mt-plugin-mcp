@@ -2,12 +2,14 @@ package MTMCP::Tools::Asset;
 use strict;
 use warnings;
 use MT::Asset;
+use MTMCP::Perm;
 
 my %IMAGE_EXT = map { $_ => 1 } qw(jpg jpeg png gif bmp webp svg);
 
 sub list {
     my ($app, $args) = @_;
     my $blog_id = $args->{blog_id} or die "blog_id is required\n";
+    MTMCP::Perm::require_blog_access($app, $blog_id);
     my $limit   = $args->{limit}   // 20;
     my $offset  = $args->{offset}  // 0;
     my $keyword = $args->{keyword};
@@ -40,6 +42,7 @@ sub get {
     my ($app, $args) = @_;
     my $asset_id = $args->{asset_id} or die "asset_id is required\n";
     my $asset = MT::Asset->load($asset_id) or die "Asset not found: $asset_id\n";
+    MTMCP::Perm::require_blog_access($app, $asset->blog_id);
     return _to_hash($asset, 1);
 }
 
@@ -47,6 +50,7 @@ sub remove {
     my ($app, $args) = @_;
     my $asset_id = $args->{asset_id} or die "asset_id is required\n";
     my $asset = MT::Asset->load($asset_id) or die "Asset not found: $asset_id\n";
+    MTMCP::Perm::require_blog_access($app, $asset->blog_id);
     my $label = $asset->label // $asset->file_name;
     $asset->remove or die $asset->errstr . "\n";
     return { asset_id => $asset_id, status => 'deleted', label => $label };
@@ -57,6 +61,7 @@ sub upload {
     my $blog_id   = $args->{blog_id}   or die "blog_id is required\n";
     my $file_name = $args->{file_name} or die "file_name is required\n";
     my $data_b64  = $args->{data}      or die "data (base64) is required\n";
+    MTMCP::Perm::require_blog_access($app, $blog_id);
 
     require MT::Blog;
     my $blog = MT::Blog->load($blog_id) or die "Blog not found: $blog_id\n";
@@ -142,6 +147,7 @@ sub thumbnail {
     my ($app, $args) = @_;
     my $asset_id = $args->{asset_id} or die "asset_id is required\n";
     my $asset = MT::Asset->load($asset_id) or die "Asset not found: $asset_id\n";
+    MTMCP::Perm::require_blog_access($app, $asset->blog_id);
     die "Asset $asset_id does not support thumbnails\n" unless $asset->can('thumbnail_url');
 
     my %opts;

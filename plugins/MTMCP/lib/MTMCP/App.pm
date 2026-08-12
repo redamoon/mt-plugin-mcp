@@ -108,6 +108,18 @@ sub _check_auth {
     if ($session->start + $session->duration < time()) {
         return _respond($app, 401, { error => 'Token expired' });
     }
+
+    require MTMCP::Auth;
+    my $author = MTMCP::Auth::resolve_author($session);
+    if ($author) {
+        require MT::Author;
+        unless ($author->status == MT::Author::ACTIVE()) {
+            return _respond($app, 401, { error => 'User account is not active' });
+        }
+        $app->user($author);
+    }
+    # author_id が紐づかない旧形式トークンは互換のため通す（$app->user は未設定のまま）
+
     return undef;
 }
 

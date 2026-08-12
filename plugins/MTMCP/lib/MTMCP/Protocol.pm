@@ -47,7 +47,7 @@ sub dispatch {
         return _result($id, {
             protocolVersion => $PROTOCOL_VERSION,
             capabilities    => { tools => { listChanged => JSON::false } },
-            serverInfo      => { name => 'MT MCP Server', version => '0.1.0' },
+            serverInfo      => { name => 'MT MCP Server', version => '0.2.0' },
         });
     }
 

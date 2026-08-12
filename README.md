@@ -99,6 +99,27 @@ RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
 ### 3. アクセストークンを発行
 
+トークンの発行方法は2通りあります。どちらで発行しても、そのトークンは**発行したユーザー本人**に紐づき、以後の操作（記事作成の著者、ブログへのアクセス権限など）はそのユーザーとして扱われます。
+
+#### 方法A: ログインAPIで発行（推奨）
+
+MT のユーザー名・パスワードで直接トークンを取得できます。管理画面を開けない CLI や自動化からも利用できます。
+
+```bash
+curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp/authenticate \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"your-username","password":"your-password"}'
+```
+
+成功レスポンス:
+```json
+{"access_token":"...","token_type":"Bearer","expires_in":604800,"user_id":3,"username":"your-username"}
+```
+
+> 通信は必ず HTTPS 経由で行ってください（平文の HTTP ではパスワードが漏えいします）。パスワード自体は保存されず、照合にのみ使用されます。5回連続で認証に失敗すると、そのユーザー名は15分間ロックされます。
+
+#### 方法B: 管理画面から発行
+
 MT 管理画面で **システム > プラグイン > MT MCP Server** を開き、**設定** タブを選択します。
 
 ![MT MCP Server の設定画面 — MCP トークンを発行する](./docs/images/mcp-token-settings.png)
@@ -107,7 +128,13 @@ MT 管理画面で **システム > プラグイン > MT MCP Server** を開き�
 2. 表示されたトークンを **コピー** ボタンでコピー
 3. 次のステップで MCP クライアントの設定に貼り付け
 
-> トークンの有効期限は発行から 7 日間です。再発行しても以前のトークンは即時無効になりません。期限切れの場合は同じ手順で再発行してください。
+> どちらの方法も、トークンの有効期限は発行から 7 日間です。再発行しても以前のトークンは即時無効になりません。期限切れの場合は同じ手順で再発行してください。
+
+#### 権限について
+
+各ツールは、トークンに紐づくユーザーがブログへのアクセス権限（MT の Permission）を持っているかを確認します。権限のないブログの記事・アセット・テンプレート・コンテンツデータは操作できません（システム管理者は全ブログを操作可能）。
+
+> 互換性のため、本機能導入前に発行された古い形式のトークンにはユーザーが紐づいていません。その場合は権限チェックをスキップし、従来どおり動作します（`author_id` を省略した場合の記事作成者などはユーザーID 1 にフォールバックします）。新しいトークンを再発行することを推奨します。
 
 ### 4. MCP クライアントを設定
 
@@ -147,7 +174,8 @@ MT 管理画面で **システム > プラグイン > MT MCP Server** を開き�
 
 | メソッド | パス | 役割 |
 |---|---|---|
-| `GET` | `/mt-data-api.cgi/v4/mcp` | SSE 接続（クライアントが POST 先 URL を受け取��） |
+| `POST` | `/mt-data-api.cgi/v4/mcp/authenticate` | ユーザー名・パスワードでログインし、アクセストークンを発行 |
+| `GET` | `/mt-data-api.cgi/v4/mcp` | SSE 接続（クライアントが POST 先 URL を受け取る） |
 | `POST` | `/mt-data-api.cgi/v4/mcp` | JSON-RPC リクエストの送受信 |
 
 認証ヘッダー（いずれか）：
@@ -229,8 +257,12 @@ plugins/MTMCP/
 ├── config.yaml
 └── lib/
     └── MTMCP/
-        ├── App.pm          # Data API ハンドラ・認証・SSE
+        ├── App.pm          # Data API ハンドラ・トークン検証・SSE
+        ├── Auth.pm         # ログインAPI（ユーザー名/パスワード → トークン発行）・失敗ロックアウト
+        ├── Perm.pm         # ブログ単位の権限チェック
         ├── Protocol.pm     # MCP JSON-RPC ディスパッチャ
+        ├── CMS/
+        │   └── Token.pm    # 管理画面からのトークン発行
         └── Tools/
             ├── Blog.pm         # blog_list
             ├── Entry.pm        # entry_list / get / create / update / delete
@@ -258,3 +290,5 @@ plugins/MTMCP/
 | `Unknown endpoint` | プラグインのキャッシュが古い | MT 管理画面でプラグインを無効→有効に切り替え |
 | `500 Can't locate JSON/XS.pm` | JSON::XS が未インストール | 不要（本プラグインは `JSON` モジュールを使用） |
 | ログイン画面が返る | エンドポイントが `mt.cgi` になっている | `mt-data-api.cgi/v4/mcp` を使用すること |
+| `429 Too Many Requests`（ログイン時） | 同一ユーザー名で5回連続認証失敗 | 15分待ってから再試行 |
+| ツール呼び出しで `この操作を行う権限がありません` | トークンに紐づくユーザーが対象ブログの権限を持っていない | 対象ブログの権限を持つユーザーでトークンを再発行するか、MT側でブログ権限を付与 |
