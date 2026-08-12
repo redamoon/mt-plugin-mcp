@@ -96,7 +96,7 @@ sub _check_auth {
     }
 
     unless ($token) {
-        $app->set_header('WWW-Authenticate' => 'Bearer realm="MT MCP"');
+        $app->set_header('WWW-Authenticate' => _www_authenticate($app));
         return _respond($app, 401, { error => 'Unauthorized' });
     }
 
@@ -121,6 +121,17 @@ sub _check_auth {
     # author_id が紐づかない旧形式トークンは互換のため通す（$app->user は未設定のまま）
 
     return undef;
+}
+
+
+# OAuth 対応クライアントが認可サーバーの情報を自動検出できるよう、
+# resource_metadata を含む WWW-Authenticate を返す（RFC 9728 準拠のヒント）。
+sub _www_authenticate {
+    my ($app) = @_;
+    my $base = eval { $app->base } // '';
+    $base =~ s{/$}{};
+    my $metadata_url = "$base/.well-known/oauth-protected-resource";
+    return qq{Bearer realm="MT MCP", resource_metadata="$metadata_url"};
 }
 
 sub _set_cors_headers {

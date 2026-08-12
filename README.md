@@ -99,11 +99,64 @@ RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
 ### 3. アクセストークンを発行
 
-トークンの発行方法は2通りあります。どちらで発行しても、そのトークンは**発行したユーザー本人**に紐づき、以後の操作（記事作成の著者、ブログへのアクセス権限など）はそのユーザーとして扱われます。
+トークンの発行方法は3通りあります。いずれで発行しても、そのトークンは**発行したユーザー本人**に紐づき、以後の操作（記事作成の著者、ブログへのアクセス権限など）はそのユーザーとして扱われます。
 
-#### 方法A: ログインAPIで発行（推奨）
+#### 方法A: ブラウザログイン（OAuth 2.1 / PKCE、推奨）
 
-MT のユーザー名・パスワードで直接トークンを取得できます。管理画面を開けない CLI や自動化からも利用できます。
+MCP クライアント自体にパスワードを一切渡さない方式です。ブラウザで MT の本物のログイン画面（多要素認証や外部認証を設定していればそれも含めて）にログインし、その場で許可した MCP クライアントだけがアクセストークンを受け取れます。
+
+1. ブラウザで下記 URL を開く（`code_verifier` はクライアント側でランダムに生成し、`code_challenge = BASE64URL(SHA256(code_verifier))`）:
+   ```
+   https://example.com/mt/mt.cgi?__mode=mcp_authorize
+     &response_type=code
+     &client_id=my-mcp-client
+     &redirect_uri=http://127.0.0.1:PORT/callback
+     &state=<ランダム文字列>
+     &code_challenge=<code_verifier のSHA256をBase64URLエンコード>
+     &code_challenge_method=S256
+   ```
+2. MT に未ログインなら通常のログイン画面が表示される。ログイン後、認可確認画面で **許可する** を選択
+3. `redirect_uri` に `code`（認可コード）と `state` が付与されてリダイレクトされる
+4. 受け取った `code` と、最初に生成した `code_verifier` を使ってトークンと交換する:
+   ```bash
+   curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp/token \
+     -H 'Content-Type: application/x-www-form-urlencoded' \
+     -d 'grant_type=authorization_code&code=<受け取ったcode>&redirect_uri=http://127.0.0.1:PORT/callback&code_verifier=<code_verifier>'
+   ```
+
+成功レスポンス:
+```json
+{"access_token":"...","token_type":"Bearer","expires_in":604800,"user_id":3,"username":"your-username"}
+```
+
+> `redirect_uri` は RFC 8252（ネイティブアプリ向け OAuth）の慣例に従い、`http://127.0.0.1:*` / `http://localhost:*` / `http://[::1]:*`（任意のポート）のみ許可しています。外部ホストへのリダイレクトはオープンリダイレクト対策のため拒否されます。認可コードの有効期限は10分・一度使うと失効します。PKCE は `S256` のみ対応（`plain` は不可）。
+>
+> Cursor / Claude Desktop など、MCP のリモートサーバー向け OAuth 自動検出（`WWW-Authenticate: Bearer resource_metadata=...` からの `.well-known` 参照）に対応したクライアントであれば、下記の静的ファイルを配置することでフローの一部を自動化できます。未対応のクライアントでは、上記の手順を独自のログインヘルパー（ブラウザを開いて `redirect_uri` でコードを受け取る小さなスクリプトなど）で実行してください。
+>
+> `https://example.com/.well-known/oauth-protected-resource`
+> ```json
+> {
+>   "resource": "https://example.com/mt/mt-data-api.cgi/v4/mcp",
+>   "authorization_servers": ["https://example.com"]
+> }
+> ```
+> `https://example.com/.well-known/oauth-authorization-server`
+> ```json
+> {
+>   "issuer": "https://example.com",
+>   "authorization_endpoint": "https://example.com/mt/mt.cgi?__mode=mcp_authorize",
+>   "token_endpoint": "https://example.com/mt/mt-data-api.cgi/v4/mcp/token",
+>   "response_types_supported": ["code"],
+>   "grant_types_supported": ["authorization_code"],
+>   "code_challenge_methods_supported": ["S256"],
+>   "token_endpoint_auth_methods_supported": ["none"]
+> }
+> ```
+> これらは静的ファイルとして Web サーバーのドキュメントルート直下（`/.well-known/`）に配置してください（MT のバージョン管理下の `/mt-data-api.cgi/v4/...` の外側にある必要があります）。
+
+#### 方法B: ログインAPIで直接発行（非対話・自動化向け）
+
+ブラウザを開けない CLI・CI などから、ユーザー名・パスワードで直接トークンを取得できます。
 
 ```bash
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp/authenticate \
@@ -111,14 +164,9 @@ curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp/authenticate \
   -d '{"username":"your-username","password":"your-password"}'
 ```
 
-成功レスポンス:
-```json
-{"access_token":"...","token_type":"Bearer","expires_in":604800,"user_id":3,"username":"your-username"}
-```
+> 通信は必ず HTTPS 経由で行ってください（平文の HTTP ではパスワードが漏えいします）。パスワード自体は保存されず、照合にのみ使用されます。5回連続で認証に失敗すると、そのユーザー名は15分間ロックされます。対話的に使える環境では方法Aの方が安全です（パスワードが MCP クライアントを経由しないため）。
 
-> 通信は必ず HTTPS 経由で行ってください（平文の HTTP ではパスワードが漏えいします）。パスワード自体は保存されず、照合にのみ使用されます。5回連続で認証に失敗すると、そのユーザー名は15分間ロックされます。
-
-#### 方法B: 管理画面から発行
+#### 方法C: 管理画面から発行
 
 MT 管理画面で **システム > プラグイン > MT MCP Server** を開き、**設定** タブを選択します。
 
@@ -128,7 +176,7 @@ MT 管理画面で **システム > プラグイン > MT MCP Server** を開き�
 2. 表示されたトークンを **コピー** ボタンでコピー
 3. 次のステップで MCP クライアントの設定に貼り付け
 
-> どちらの方法も、トークンの有効期限は発行から 7 日間です。再発行しても以前のトークンは即時無効になりません。期限切れの場合は同じ手順で再発行してください。
+> いずれの方法も、トークンの有効期限は発行から 7 日間です。再発行しても以前のトークンは即時無効になりません。期限切れの場合は同じ手順で再発行してください。
 
 #### 権限について
 
@@ -174,6 +222,9 @@ MT 管理画面で **システム > プラグイン > MT MCP Server** を開き�
 
 | メソッド | パス | 役割 |
 |---|---|---|
+| `GET` | `/mt.cgi?__mode=mcp_authorize` | OAuth 認可エンドポイント（ブラウザでMTにログイン→consent画面） |
+| `POST` | `/mt.cgi?__mode=mcp_authorize_approve` | consent画面からの許可/拒否を受け取り、`redirect_uri` へリダイレクト |
+| `POST` | `/mt-data-api.cgi/v4/mcp/token` | OAuth トークンエンドポイント（認可コード + PKCE → アクセストークン） |
 | `POST` | `/mt-data-api.cgi/v4/mcp/authenticate` | ユーザー名・パスワードでログインし、アクセストークンを発行 |
 | `GET` | `/mt-data-api.cgi/v4/mcp` | SSE 接続（クライアントが POST 先 URL を受け取る） |
 | `POST` | `/mt-data-api.cgi/v4/mcp` | JSON-RPC リクエストの送受信 |
@@ -259,10 +310,12 @@ plugins/MTMCP/
     └── MTMCP/
         ├── App.pm          # Data API ハンドラ・トークン検証・SSE
         ├── Auth.pm         # ログインAPI（ユーザー名/パスワード → トークン発行）・失敗ロックアウト
+        ├── OAuth.pm        # OAuth 2.1（認可コード + PKCE）トークンエンドポイント・検証ロジック
         ├── Perm.pm         # ブログ単位の権限チェック
         ├── Protocol.pm     # MCP JSON-RPC ディスパッチャ
         ├── CMS/
-        │   └── Token.pm    # 管理画面からのトークン発行
+        │   ├── Token.pm      # 管理画面からのトークン発行
+        │   └── Authorize.pm  # OAuth 認可エンドポイント（consent画面）
         └── Tools/
             ├── Blog.pm         # blog_list
             ├── Entry.pm        # entry_list / get / create / update / delete
@@ -292,3 +345,5 @@ plugins/MTMCP/
 | ログイン画面が返る | エンドポイントが `mt.cgi` になっている | `mt-data-api.cgi/v4/mcp` を使用すること |
 | `429 Too Many Requests`（ログイン時） | 同一ユーザー名で5回連続認証失敗 | 15分待ってから再試行 |
 | ツール呼び出しで `この操作を行う権限がありません` | トークンに紐づくユーザーが対象ブログの権限を持っていない | 対象ブログの権限を持つユーザーでトークンを再発行するか、MT側でブログ権限を付与 |
+| `redirect_uri is not allowed`（OAuth認可時） | `redirect_uri` がループバック（127.0.0.1 / localhost / [::1]）以外 | クライアント側の redirect_uri をループバックアドレスに変更 |
+| `invalid_grant`（トークン交換時） | 認可コードの期限切れ（10分）・使用済み・`code_verifier`不一致・`redirect_uri`不一致 | 認可フローを最初からやり直す |
