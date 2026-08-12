@@ -161,7 +161,7 @@ curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp/token \
 >   "token_endpoint": "https://example.com/mt/mt-data-api.cgi/v4/mcp/token",
 >   "registration_endpoint": "https://example.com/mt/mt-data-api.cgi/v4/mcp/register",
 >   "response_types_supported": ["code"],
->   "grant_types_supported": ["authorization_code"],
+>   "grant_types_supported": ["authorization_code", "refresh_token"],
 >   "code_challenge_methods_supported": ["S256"],
 >   "token_endpoint_auth_methods_supported": ["none"]
 > }

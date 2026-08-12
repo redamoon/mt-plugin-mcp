@@ -1,7 +1,7 @@
 name: MT MCP Server
 id: MTMCP
 key: MTMCP
-version: 0.5.0
+version: 0.5.1
 schema_version: 0.1
 description: Movable Type 9 用 MCP (Model Context Protocol) サーバープラグイン
 
