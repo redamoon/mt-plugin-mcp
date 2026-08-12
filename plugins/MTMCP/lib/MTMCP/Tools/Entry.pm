@@ -5,6 +5,11 @@ use MT::Entry;
 use MT::Placement;
 use MTMCP::Perm;
 
+# キーワード検索時にPerl側でスキャンする最大件数。DB側でのLIKE検索ではなく
+# 直近のレコードをこの件数までロードしてから絞り込むため、これを超えて
+# 古いレコードにしかマッチしないキーワードは検出できない（既知の制約）。
+use constant KEYWORD_SCAN_LIMIT => 2000;
+
 sub list {
     my ($app, $args) = @_;
     my $blog_id = $args->{blog_id} or die "blog_id is required\n";
@@ -19,8 +24,7 @@ sub list {
 
     my %load_opts = ( sort => 'authored_on', direction => 'descend' );
     if ($keyword) {
-        # キーワード検索時は候補を多めに取得してから絞り込む
-        $load_opts{limit} = 500;
+        $load_opts{limit} = KEYWORD_SCAN_LIMIT;
     } else {
         $load_opts{limit}  = $limit;
         $load_opts{offset} = $offset;

@@ -4,7 +4,28 @@ use warnings;
 use MT::Asset;
 use MTMCP::Perm;
 
-my %IMAGE_EXT = map { $_ => 1 } qw(jpg jpeg png gif bmp webp svg);
+my %IMAGE_EXT = map { $_ => 1 } qw(jpg jpeg png gif bmp webp);
+
+# アップロードを許可する拡張子（許可リスト方式）。site_path 配下に保存され
+# site_url から配信される可能性があるため、サーバー上で実行され得る拡張子
+# （.php, .cgi, .pl, .phtml, .htaccess 等）は含めない。SVGはスクリプトを
+# 埋め込める（保存型XSSのリスク）ため意図的に除外している。
+my %ALLOWED_UPLOAD_EXT = map { $_ => 1 } (
+    %IMAGE_EXT,
+    qw(ico tif tiff pdf txt csv md
+       doc docx xls xlsx ppt pptx
+       zip
+       mp3 mp4 mov avi wav ogg webm),
+);
+
+# キーワード検索時にPerl側でスキャンする最大件数。DB側でのLIKE検索ではなく
+# 直近のレコードをこの件数までロードしてから絞り込むため、これを超えて
+# 古いレコードにしかマッチしないキーワードは検出できない（既知の制約）。
+use constant KEYWORD_SCAN_LIMIT => 2000;
+
+# Base64デコード後のアップロードサイズ上限（20MB）。上限を設けないと
+# 大きなペイロードでメモリ・ディスクを消費させられる。
+use constant MAX_UPLOAD_BYTES => 20 * 1024 * 1024;
 
 sub list {
     my ($app, $args) = @_;
@@ -18,7 +39,7 @@ sub list {
 
     my %load_opts = ( sort => 'created_on', direction => 'descend' );
     if ($keyword) {
-        $load_opts{limit} = 500;
+        $load_opts{limit} = KEYWORD_SCAN_LIMIT;
     } else {
         $load_opts{limit}  = $limit;
         $load_opts{offset} = $offset;
@@ -69,14 +90,23 @@ sub upload {
     my $site_url  = $blog->site_url  or die "Blog site_url is not configured\n";
     $site_url =~ s{/+$}{};
 
+    # Base64は元データよりおよそ4/3に膨らむため、デコード前に概算でも上限を
+    # 超えていないか確認してから decode_base64 を呼ぶ（メモリ消費対策）。
+    if (length($data_b64) > MAX_UPLOAD_BYTES * 4 / 3 + 1024) {
+        die "Uploaded file exceeds the maximum allowed size (" . MAX_UPLOAD_BYTES . " bytes)\n";
+    }
+
     require MIME::Base64;
     my $bytes = eval { MIME::Base64::decode_base64($data_b64) };
     die "Invalid base64 data\n" if $@ || !defined $bytes || !length $bytes;
+    die "Uploaded file exceeds the maximum allowed size (" . MAX_UPLOAD_BYTES . " bytes)\n"
+        if length($bytes) > MAX_UPLOAD_BYTES;
 
     (my $safe_name = $file_name) =~ s{[/\\]}{_}g;
     $safe_name =~ s{\.\.}{_}g;
     die "file_name must have an extension\n" unless $safe_name =~ /\.(\w+)$/;
     my $ext = lc $1;
+    die "File extension not allowed: .$ext\n" unless $ALLOWED_UPLOAD_EXT{$ext};
 
     my $sub_dir = $args->{directory} // 'mcp-uploads';
     $sub_dir =~ s{^/+|/+$}{}g;

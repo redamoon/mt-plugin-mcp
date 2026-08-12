@@ -106,7 +106,7 @@ RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 MCP クライアント自体にパスワードを一切渡さない方式です。ブラウザで MT の本物のログイン画面（多要素認証や外部認証を設定していればそれも含めて）にログインし、その場で許可した MCP クライアントだけがアクセストークンを受け取れます。
 
 1. ブラウザで下記 URL を開く（`code_verifier` はクライアント側でランダムに生成し、`code_challenge = BASE64URL(SHA256(code_verifier))`）:
-   ```
+   ```text
    https://example.com/mt/mt.cgi?__mode=mcp_authorize
      &response_type=code
      &client_id=my-mcp-client
@@ -117,7 +117,8 @@ MCP クライアント自体にパスワードを一切渡さない方式です�
    ```
 2. MT に未ログインなら通常のログイン画面が表示される。ログイン後、認可確認画面で **許可する** を選択
 3. `redirect_uri` に `code`（認可コード）と `state` が付与されてリダイレクトされる
-4. 受け取った `code` と、最初に生成した `code_verifier` を使ってトークンと交換する:
+4. **クライアント側は、受け取った `state` が手順1で生成したものと完全に一致することを必ず確認してから次に進んでください。** 一致しない場合はリクエストを中断すること（認可レスポンスの差し替え対策）。
+5. 受け取った `code` と、最初に生成した `code_verifier` を使ってトークンと交換する:
    ```bash
    curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp/token \
      -H 'Content-Type: application/x-www-form-urlencoded' \
@@ -160,12 +161,16 @@ MCP クライアント自体にパスワードを一切渡さない方式です�
 ブラウザを開けない CLI・CI などから、ユーザー名・パスワードで直接トークンを取得できます。
 
 ```bash
+read -s -p 'Password: ' MT_PASSWORD; echo
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp/authenticate \
   -H 'Content-Type: application/json' \
-  -d '{"username":"your-username","password":"your-password"}'
+  --data-binary @- <<EOF
+{"username":"your-username","password":"$MT_PASSWORD"}
+EOF
+unset MT_PASSWORD
 ```
 
-> 通信は必ず HTTPS 経由で行ってください（平文の HTTP ではパスワードが漏えいします）。パスワード自体は保存されず、照合にのみ使用されます。5回連続で認証に失敗すると、そのユーザー名は15分間ロックされます。対話的に使える環境では方法Aの方が安全です（パスワードが MCP クライアントを経由しないため）。
+> `-d` の引数に直接パスワードを書くと、シェルの履歴ファイルや `ps` コマンドの実行中プロセス一覧に残ってしまうため避けてください。上記のように標準入力（`--data-binary @-`）経由で渡すことを推奨します。通信は必ず HTTPS 経由で行ってください（平文の HTTP ではパスワードが漏えいします）。パスワード自体は保存されず、照合にのみ使用されます。5回連続で認証に失敗すると、そのユーザー名は15分間ロックされます。対話的に使える環境では方法Aの方が安全です（パスワードが MCP クライアントを経由しないため）。
 
 #### 方法C: 管理画面から発行
 
@@ -183,7 +188,7 @@ MT 管理画面で **システム > プラグイン > MT MCP Server** を開き�
 
 各ツールは、トークンに紐づくユーザーがブログへのアクセス権限（MT の Permission）を持っているかを確認します。権限のないブログの記事・アセット・テンプレート・コンテンツデータは操作できません（システム管理者は全ブログを操作可能）。
 
-> 互換性のため、本機能導入前に発行された古い形式のトークンにはユーザーが紐づいていません。その場合は権限チェックをスキップし、従来どおり動作します（`author_id` を省略した場合の記事作成者などはユーザーID 1 にフォールバックします）。新しいトークンを再発行することを推奨します。
+> 本機能導入前に発行された、ユーザーが紐づかない古い形式のトークンは **401 エラーで拒否されます**（ブログ権限チェックを回避できてしまうため）。古いトークンをお使いの場合は、上記いずれかの方法で新しいトークンを再発行してください。
 
 ### 4. MCP クライアントを設定
 
@@ -330,8 +335,9 @@ plugins/MTMCP/
 ### asset_upload の注意点
 
 - アップロード先は `blog_id` のブログの `site_path` 配下（デフォルトは `mcp-uploads/` サブディレクトリ）。書き込み権限が必要です。
-- `data` には Base64 エンコードしたファイル内容を渡します。
-- 画像拡張子（jpg / jpeg / png / gif / bmp / webp / svg）は自動的に画像アセットとして登録され、幅・高さの取得を試みます（MT 側で画像処理バックエンド〈Image::Magick / GD / Imager〉が有効な場合）。
+- `data` には Base64 エンコードしたファイル内容を渡します。最大サイズは20MB（Base64デコード後）です。
+- 許可される拡張子は許可リスト方式です: `jpg` / `jpeg` / `png` / `gif` / `bmp` / `webp` / `ico` / `tif` / `tiff` / `pdf` / `txt` / `csv` / `md` / `doc` / `docx` / `xls` / `xlsx` / `ppt` / `pptx` / `zip` / `mp3` / `mp4` / `mov` / `avi` / `wav` / `ogg` / `webm`。サーバー上で実行され得る拡張子（`.php` / `.cgi` / `.pl` など）や、スクリプトを埋め込める `.svg`（保存型XSSのリスク）は安全のため許可されません。
+- 画像拡張子は自動的に画像アセットとして登録され、幅・高さの取得を試みます（MT 側で画像処理バックエンド〈Image::Magick / GD / Imager〉が有効な場合）。
 - `asset_thumbnail` は MT の動的サムネイル生成機能を利用するため、同様に画像処理バックエンドの設定が必要です。
 
 ## トラブルシューティング
@@ -349,3 +355,6 @@ plugins/MTMCP/
 | `redirect_uri is not allowed`（OAuth認可時） | `redirect_uri` がループバック（127.0.0.1 / localhost / [::1]）でも http/https 以外のカスタムスキームでもない | クライアント側の redirect_uri を確認（http(s) の外部ホストは非対応） |
 | `invalid_grant`（トークン交換時） | 認可コードの期限切れ（10分）・使用済み・`code_verifier`不一致・`redirect_uri`不一致 | 認可フローを最初からやり直す |
 | `Incompatible auth server: does not support dynamic client registration`（Cursor） | `oauth-authorization-server` に `registration_endpoint` が含まれていない | `.well-known/oauth-authorization-server` に `registration_endpoint` を追加（本READMEのサンプル参照） |
+| `This token was issued by an older version...`（401） | ユーザーに紐づかない古い形式のトークンを使用している | 新しいトークンを再発行する |
+| `invalid_grant`: `client_id mismatch`（トークン交換時） | 認可時と異なる `client_id` でトークン交換を試みた | `/authorize` と `/token` で同じ `client_id` を使用する |
+| アップロードで `File extension not allowed` | 許可されていない拡張子（実行可能ファイルや`.svg`など）を指定した | 許可拡張子（README「asset_uploadの注意点」参照）に変換してからアップロード |

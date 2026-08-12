@@ -11,21 +11,25 @@ sub generate {
     my ($app) = @_;
 
     $app->set_header('Content-Type' => 'application/json; charset=UTF-8');
+    require JSON;
+    my $json = JSON->new->ascii;
 
     my $user = $app->user;
     unless ($user && !$user->is_anonymous) {
-        return '{"error":"Permission denied"}';
+        return $json->encode({ error => 'Permission denied' });
     }
     my $xhr = $app->get_header('X-Requested-With') // '';
     unless ($xhr eq 'XMLHttpRequest') {
-        return '{"error":"Invalid request"}';
+        return $json->encode({ error => 'Invalid request' });
     }
 
     my $token = eval { MTMCP::Auth::issue_token_for($user) };
-    return '{"error":"' . ($@ || 'unknown error') . '"}' unless $token;
+    unless ($token) {
+        warn "MTMCP: token generation failed: $@";
+        return $json->encode({ error => 'Could not generate token' });
+    }
 
-    require JSON;
-    return JSON->new->ascii->encode({ token => $token });
+    return $json->encode({ token => $token });
 }
 
 sub show {
@@ -42,7 +46,10 @@ sub show {
         return $app->error('Invalid request') unless $app->validate_magic;
 
         my $token = eval { MTMCP::Auth::issue_token_for($user) };
-        return $app->error('トークンの保存に失敗しました: ' . $@) unless $token;
+        unless ($token) {
+            warn "MTMCP: token generation failed: $@";
+            return $app->error('トークンの発行に失敗しました。しばらくしてから再度お試しください。');
+        }
 
         $param->{token} = $token;
     }

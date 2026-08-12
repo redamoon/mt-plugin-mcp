@@ -18,9 +18,11 @@ sub list {
         @tmpls = grep { index(lc($_->name // ''), $kw) >= 0 } @tmpls;
     }
     if (defined(my $offset = $args->{offset})) {
-        @tmpls = splice(@tmpls, $offset);
+        $offset = 0 if $offset < 0;
+        @tmpls = $offset < @tmpls ? splice(@tmpls, $offset) : ();
     }
     if (defined(my $limit = $args->{limit})) {
+        $limit = 0 if $limit < 0;
         @tmpls = splice(@tmpls, 0, $limit);
     }
 
@@ -51,7 +53,25 @@ sub remove {
     my $tmpl = MT::Template->load($tmpl_id) or die "Template not found: $tmpl_id\n";
     MTMCP::Perm::require_blog_access($app, $tmpl->blog_id);
     my $name = $tmpl->name;
+
+    # テンプレート削除は MT::FileInfo のレコードは削除するが、公開済みの
+    # 静的ファイル自体は残る。先にファイルパスを控えておき、DBレコード削除後
+    # に実ファイルも削除する。
+    require MT::FileInfo;
+    my @file_paths = map { $_->file_path // () } MT::FileInfo->load({ template_id => $tmpl_id });
+
     $tmpl->remove or die $tmpl->errstr . "\n";
+
+    if (@file_paths) {
+        require MT::FileMgr;
+        my $fmgr = eval { MT::FileMgr->new('Local') };
+        if ($fmgr) {
+            for my $path (@file_paths) {
+                eval { $fmgr->delete($path) if $fmgr->exists($path) };
+            }
+        }
+    }
+
     return { template_id => $tmpl_id, status => 'deleted', name => $name };
 }
 
