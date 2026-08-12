@@ -192,29 +192,24 @@ sub _random_token {
 
 sub _parse_body {
     my ($app) = @_;
-    my $ct   = $app->get_header('Content-Type') // $ENV{CONTENT_TYPE} // '';
-    my $body = $app->param('POSTDATA') // $app->request_content // '';
+    my $ct = $app->get_header('Content-Type') // $ENV{CONTENT_TYPE} // '';
 
     if ($ct =~ m{application/json}i) {
+        my $body = $app->param('POSTDATA') // $app->request_content // '';
         my $data = eval { $json->decode($body) };
         return (ref($data) eq 'HASH') ? $data : {};
     }
 
-    # OAuth のトークンエンドポイントは application/x-www-form-urlencoded が標準
+    # application/x-www-form-urlencoded（OAuth トークンエンドポイントの標準形式）は
+    # MT のアプリフレームワーク（CGI.pm）側で既にパース済みのため、$app->param() から
+    # 直接取得する。生のリクエストボディを手動で再パースしようとしても、
+    # CGI.pm が読み切った後では空になっている。
     my %params;
-    for my $pair (split /&/, $body) {
-        my ($k, $v) = split /=/, $pair, 2;
-        next unless defined $k && length $k;
-        $params{ _uri_unescape($k) } = _uri_unescape($v // '');
+    for my $key (qw(grant_type code redirect_uri code_verifier client_id)) {
+        my $v = $app->param($key);
+        $params{$key} = $v if defined $v;
     }
     return \%params;
-}
-
-sub _uri_unescape {
-    my ($str) = @_;
-    $str =~ tr/+/ /;
-    $str =~ s/%([0-9A-Fa-f]{2})/chr(hex($1))/ge;
-    return $str;
 }
 
 sub _oauth_error {
