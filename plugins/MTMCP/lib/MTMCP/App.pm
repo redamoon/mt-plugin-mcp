@@ -96,7 +96,7 @@ sub _check_auth {
     }
 
     unless ($token) {
-        $app->set_header('WWW-Authenticate' => 'Bearer realm="MT MCP"');
+        $app->set_header('WWW-Authenticate' => _www_authenticate($app));
         return _respond($app, 401, { error => 'Unauthorized' });
     }
 
@@ -108,7 +108,35 @@ sub _check_auth {
     if ($session->start + $session->duration < time()) {
         return _respond($app, 401, { error => 'Token expired' });
     }
+
+    require MTMCP::Auth;
+    my $author = MTMCP::Auth::resolve_author($session);
+    unless ($author) {
+        # author_id が紐づかない旧形式トークンはブログ権限チェック（MTMCP::Perm）を
+        # 回避できてしまうため、互換動作させず拒否する。再発行を促す。
+        return _respond($app, 401, {
+            error             => 'Invalid token',
+            error_description => 'This token was issued by an older version of this plugin and is no longer accepted. Please reissue a token.',
+        });
+    }
+    require MT::Author;
+    unless ($author->status == MT::Author::ACTIVE()) {
+        return _respond($app, 401, { error => 'User account is not active' });
+    }
+    $app->user($author);
+
     return undef;
+}
+
+
+# OAuth 対応クライアントが認可サーバーの情報を自動検出できるよう、
+# resource_metadata を含む WWW-Authenticate を返す（RFC 9728 準拠のヒント）。
+sub _www_authenticate {
+    my ($app) = @_;
+    my $base = eval { $app->base } // '';
+    $base =~ s{/$}{};
+    my $metadata_url = "$base/.well-known/oauth-protected-resource";
+    return qq{Bearer realm="MT MCP", resource_metadata="$metadata_url"};
 }
 
 sub _set_cors_headers {

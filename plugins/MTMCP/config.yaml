@@ -1,7 +1,7 @@
 name: MT MCP Server
 id: MTMCP
 key: MTMCP
-version: 0.1.0
+version: 0.4.2
 schema_version: 0.1
 description: Movable Type 9 用 MCP (Model Context Protocol) サーバープラグイン
 
@@ -13,11 +13,31 @@ config_template: cfg_plugin.tmpl
 applications:
   cms:
     methods:
-      mcp_token:     $MTMCP::MTMCP::CMS::Token::show
-      gen_mcp_token: $MTMCP::MTMCP::CMS::Token::generate
+      mcp_token:             $MTMCP::MTMCP::CMS::Token::show
+      gen_mcp_token:         $MTMCP::MTMCP::CMS::Token::generate
+      mcp_authorize:         $MTMCP::MTMCP::CMS::Authorize::show
+      mcp_authorize_approve: $MTMCP::MTMCP::CMS::Authorize::approve
 
   data_api:
     endpoints:
+      - id: mcp_authenticate
+        route: /mcp/authenticate
+        version: 4
+        verb: POST
+        handler: $MTMCP::MTMCP::Auth::handle_login
+        requires_login: 0
+      - id: mcp_token
+        route: /mcp/token
+        version: 4
+        verb: POST
+        handler: $MTMCP::MTMCP::OAuth::handle_token
+        requires_login: 0
+      - id: mcp_register
+        route: /mcp/register
+        version: 4
+        verb: POST
+        handler: $MTMCP::MTMCP::OAuth::handle_register
+        requires_login: 0
       - id: mcp
         route: /mcp
         version: 4
