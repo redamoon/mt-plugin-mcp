@@ -32,13 +32,18 @@
 
     <div class="field field-left-label pkg">
       <div class="field-header">
-        <label>Cursor MCP 設定</label>
+        <label>MCP クライアント設定</label>
       </div>
       <div class="field-content">
-        <p class="hint">mcp.json の <code>headers</code> に以下を追加してください：</p>
-        <pre style="background:#f5f5f5;padding:12px;border-radius:4px;overflow-x:auto;">{
-  "Authorization": "Bearer <mt:var name="token" escape="html">"
-}</pre>
+        <p class="hint">
+          Cursor（<code>~/.cursor/mcp.json</code>）・Claude Desktop（<code>claude_desktop_config.json</code>）
+          向けの設定です。設定ファイルがまだ無い・MCPサーバーを他に登録していない場合は、
+          このJSON全体をそのままファイルに貼り付けてください。既に他のMCPサーバーを
+          設定済みの場合は、全体を貼り付けずに <code>movable-type</code> の項目だけを
+          既存の <code>mcpServers</code> オブジェクトの中にコピーしてください
+          （そのまま貼ると <code>mcpServers</code> が二重にネストされてしまいます）。
+        </p>
+        <pre style="background:#f5f5f5;padding:12px;border-radius:4px;overflow-x:auto;"><mt:var name="config_json" escape="html"></pre>
       </div>
     </div>
   </div>

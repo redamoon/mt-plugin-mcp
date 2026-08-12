@@ -21,7 +21,8 @@ sub secure_random_hex {
 
 my $json = JSON->new->ascii->canonical;
 
-use constant TOKEN_DURATION   => 604800;   # トークン有効期限: 7日
+use constant TOKEN_DURATION         => 604800;            # アクセストークン有効期限: 7日
+use constant REFRESH_TOKEN_DURATION => 30 * 24 * 60 * 60;  # リフレッシュトークン有効期限: 30日
 use constant FAIL_WINDOW      => 900;      # ロックアウト判定の時間窓: 15分
 use constant FAIL_MAX_ATTEMPT => 5;        # ロックアウトまでの失敗回数
 
@@ -70,22 +71,29 @@ sub handle_login {
 
     _clear_failures($username);
 
-    my $token = _issue_token($author);
+    my $token         = _issue_token($author);
+    my $refresh_token = _issue_refresh_token($author);
 
     return _respond($app, 200, {
-        access_token => $token,
-        token_type   => 'Bearer',
-        expires_in   => TOKEN_DURATION,
-        user_id      => $author->id,
-        username     => $author->name,
+        access_token  => $token,
+        refresh_token => $refresh_token,
+        token_type    => 'Bearer',
+        expires_in    => TOKEN_DURATION,
+        user_id       => $author->id,
+        username      => $author->name,
     });
 }
 
 # トークンを発行し、author_id を紐づけて保存する。
-# MTMCP::CMS::Token（管理画面からの発行）とも共用する。
+# MTMCP::CMS::Token（管理画面からの発行）・MTMCP::OAuth とも共用する。
 sub issue_token_for {
     my ($author) = @_;
     return _issue_token($author);
+}
+
+sub issue_refresh_token_for {
+    my ($author) = @_;
+    return _issue_refresh_token($author);
 }
 
 sub _issue_token {
@@ -104,6 +112,22 @@ sub _issue_token {
     return $token;
 }
 
+sub _issue_refresh_token {
+    my ($author) = @_;
+    my $token = secure_random_hex(32);
+
+    require MT::Session;
+    my $session = MT::Session->new;
+    $session->id($token);
+    $session->kind('DT');
+    $session->start(time());
+    $session->duration(REFRESH_TOKEN_DURATION);
+    $session->set('author_id', $author->id);
+    $session->save or die "Could not create refresh token session: " . $session->errstr . "\n";
+
+    return $token;
+}
+
 # トークンに紐づくユーザーを解決する。author_id が無い（旧形式）トークンは
 # undef を返し、呼び出し側で互換動作させる。
 sub resolve_author {
@@ -112,6 +136,42 @@ sub resolve_author {
     return undef unless $author_id;
     require MT::Author;
     return MT::Author->load($author_id);
+}
+
+# リフレッシュトークンを検証し、原子的に一度きり消費する。
+# 有効期限チェックの後、専用の「消費済みマーカー」行を主キー重複を利用して
+# 作成することで消費を原子的に行う（同一トークンに対する並列リクエストの
+# うち1つだけが消費に成功する）。成功したときだけ元のセッション（呼び出し
+# 側は既に消費済みとして扱ってよい。remove は本関数内で完了している）を
+# 返す。無効・期限切れ・既に消費済みなら undef。
+sub resolve_refresh_session {
+    my ($refresh_token) = @_;
+    return undef unless defined $refresh_token && length $refresh_token;
+
+    require MT::Session;
+    my $session = MT::Session->load({ id => $refresh_token, kind => 'DT' });
+    return undef unless $session;
+    return undef if $session->start + $session->duration < time();
+
+    return undef unless _claim_refresh_token($refresh_token);
+
+    $session->remove;
+    return $session;
+}
+
+# $refresh_token に対応する「消費済みマーカー」行を作成しようとする。
+# 同じ id・kind の行の作成は主キー重複エラーで失敗するため、並列リクエスト
+# のうち最初の1つだけが成功する（DBのUNIQUE制約に依存する、DB非依存で
+# 信頼できる原子性の担保方法）。
+sub _claim_refresh_token {
+    my ($refresh_token) = @_;
+    require MT::Session;
+    my $claim = MT::Session->new;
+    $claim->id('mcprtclaim:' . sha256_hex($refresh_token));
+    $claim->kind('DU');
+    $claim->start(time());
+    $claim->duration(REFRESH_TOKEN_DURATION);
+    return $claim->save ? 1 : 0;
 }
 
 sub _fail_key {
