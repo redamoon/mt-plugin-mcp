@@ -29,7 +29,19 @@ sub generate {
         return $json->encode({ error => 'Could not generate token' });
     }
 
-    return $json->encode({ token => $token });
+    return $json->encode({ token => $token, mcp_url => _mcp_url() });
+}
+
+# Cursor / Claude Desktop の mcp.json にそのまま貼れる完成形JSONを組み立てる
+# ため、MCP エンドポイント（mt-data-api.cgi 側）の絶対URLをサーバー側で
+# 算出する。CMSアプリ（mt.cgi）自身のURLからは組み立てられないため、
+# MT の設定値（CGIPath / DataAPIScript）から直接構築する。
+sub _mcp_url {
+    require MT;
+    my $cgi_path   = MT->config('CGIPath')      // '';
+    my $da_script  = MT->config('DataAPIScript') || 'mt-data-api.cgi';
+    $cgi_path =~ s{/*$}{/};
+    return $cgi_path . $da_script . '/v4/mcp';
 }
 
 sub show {
@@ -52,6 +64,17 @@ sub show {
         }
 
         $param->{token} = $token;
+
+        require JSON;
+        $param->{config_json} = JSON->new->utf8(0)->pretty->canonical->encode({
+            mcpServers => {
+                'movable-type' => {
+                    type    => 'sse',
+                    url     => _mcp_url(),
+                    headers => { Authorization => "Bearer $token" },
+                },
+            },
+        });
     }
 
     return $app->load_tmpl('mcp_token.tmpl', $param);
