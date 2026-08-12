@@ -14,6 +14,15 @@ sub list {
     my $keyword = $args->{keyword};
 
     require MT::ContentData;
+    require MTMCP::Perm;
+    my $check_blog_id = $args->{blog_id};
+    unless ($check_blog_id) {
+        require MT::ContentType;
+        my $ct = MT::ContentType->load($ct_id);
+        $check_blog_id = $ct->blog_id if $ct;
+    }
+    MTMCP::Perm::require_blog_access($app, $check_blog_id);
+
     my %terms = (content_type_id => $ct_id);
     $terms{blog_id} = $args->{blog_id} if $args->{blog_id};
     $terms{status}  = RELEASE() if $status eq 'publish';
@@ -45,7 +54,9 @@ sub remove {
     my ($app, $args) = @_;
     my $cd_id = $args->{content_data_id} or die "content_data_id is required\n";
     require MT::ContentData;
+    require MTMCP::Perm;
     my $cd = MT::ContentData->load($cd_id) or die "ContentData not found: $cd_id\n";
+    MTMCP::Perm::require_blog_access($app, $cd->blog_id);
     $cd->remove or die $cd->errstr . "\n";
     return { content_data_id => $cd_id, status => 'deleted' };
 }
@@ -54,7 +65,9 @@ sub get {
     my ($app, $args) = @_;
     my $cd_id = $args->{content_data_id} or die "content_data_id is required\n";
     require MT::ContentData;
+    require MTMCP::Perm;
     my $cd = MT::ContentData->load($cd_id) or die "ContentData not found: $cd_id\n";
+    MTMCP::Perm::require_blog_access($app, $cd->blog_id);
     return _to_hash($cd, 1);
 }
 
@@ -62,6 +75,8 @@ sub create {
     my ($app, $args) = @_;
     my $ct_id   = $args->{content_type_id} or die "content_type_id is required\n";
     my $blog_id = $args->{blog_id}         or die "blog_id is required\n";
+    require MTMCP::Perm;
+    MTMCP::Perm::require_blog_access($app, $blog_id);
 
     require MT::ContentData;
     require MT::ContentType;
@@ -89,7 +104,9 @@ sub update {
     my $cd_id = $args->{content_data_id} or die "content_data_id is required\n";
 
     require MT::ContentData;
+    require MTMCP::Perm;
     my $cd = MT::ContentData->load($cd_id) or die "ContentData not found: $cd_id\n";
+    MTMCP::Perm::require_blog_access($app, $cd->blog_id);
 
     if (defined $args->{status}) {
         $cd->status($args->{status} eq 'publish' ? RELEASE() : HOLD());

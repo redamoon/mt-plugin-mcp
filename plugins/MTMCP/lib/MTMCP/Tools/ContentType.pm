@@ -5,6 +5,8 @@ use warnings;
 sub list {
     my ($app, $args) = @_;
     my $blog_id = $args->{blog_id} or die "blog_id is required\n";
+    require MTMCP::Perm;
+    MTMCP::Perm::require_blog_access($app, $blog_id);
     require MT::ContentType;
     my @cts = MT::ContentType->load({ blog_id => $blog_id });
     return [ map { _to_hash($_) } @cts ];
@@ -15,6 +17,8 @@ sub get {
     my $ct_id = $args->{content_type_id} or die "content_type_id is required\n";
     require MT::ContentType;
     my $ct = MT::ContentType->load($ct_id) or die "ContentType not found: $ct_id\n";
+    require MTMCP::Perm;
+    MTMCP::Perm::require_blog_access($app, $ct->blog_id);
     return _to_hash($ct, 1);
 }
 
@@ -22,6 +26,8 @@ sub create {
     my ($app, $args) = @_;
     my $blog_id = $args->{blog_id} or die "blog_id is required\n";
     my $name    = $args->{name}    or die "name is required\n";
+    require MTMCP::Perm;
+    MTMCP::Perm::require_blog_access($app, $blog_id);
 
     require MT::ContentType;
     require MT::ContentField;

@@ -3,10 +3,12 @@ use strict;
 use warnings;
 use MT::Entry;
 use MT::Placement;
+use MTMCP::Perm;
 
 sub list {
     my ($app, $args) = @_;
     my $blog_id = $args->{blog_id} or die "blog_id is required\n";
+    MTMCP::Perm::require_blog_access($app, $blog_id);
     my $limit   = $args->{limit}   // 20;
     my $offset  = $args->{offset}  // 0;
     my $status  = $args->{status}  // 'publish';
@@ -42,6 +44,7 @@ sub remove {
     my ($app, $args) = @_;
     my $entry_id = $args->{entry_id} or die "entry_id is required\n";
     my $entry = MT::Entry->load($entry_id) or die "Entry not found: $entry_id\n";
+    MTMCP::Perm::require_blog_access($app, $entry->blog_id);
     my $title = $entry->title;
     $entry->remove or die $entry->errstr . "\n";
     return { entry_id => $entry_id, status => 'deleted', title => $title };
@@ -51,6 +54,7 @@ sub get {
     my ($app, $args) = @_;
     my $entry_id = $args->{entry_id} or die "entry_id is required\n";
     my $entry = MT::Entry->load($entry_id) or die "Entry not found: $entry_id\n";
+    MTMCP::Perm::require_blog_access($app, $entry->blog_id);
     return _to_hash($entry, 1);
 }
 
@@ -58,6 +62,7 @@ sub create {
     my ($app, $args) = @_;
     my $blog_id = $args->{blog_id} or die "blog_id is required\n";
     my $title   = $args->{title}   or die "title is required\n";
+    MTMCP::Perm::require_blog_access($app, $blog_id);
     my $entry = MT::Entry->new;
     $entry->blog_id($blog_id);
     $entry->title($title);
@@ -78,6 +83,7 @@ sub update {
     my ($app, $args) = @_;
     my $entry_id = $args->{entry_id} or die "entry_id is required\n";
     my $entry = MT::Entry->load($entry_id) or die "Entry not found: $entry_id\n";
+    MTMCP::Perm::require_blog_access($app, $entry->blog_id);
     $entry->title($args->{title}) if defined $args->{title};
     $entry->text($args->{body})   if defined $args->{body};
     if (defined $args->{status}) {

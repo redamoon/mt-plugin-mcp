@@ -10,6 +10,13 @@ sub list {
         { class => '*' },
         { sort => 'name', direction => 'ascend' }
     );
+
+    my $user = eval { $app->user };
+    if ($user && !$user->is_superuser) {
+        require MT::Permission;
+        @blogs = grep { MT::Permission->load({ author_id => $user->id, blog_id => $_->id }) } @blogs;
+    }
+
     return [ map {
         {
             id   => $_->id,
