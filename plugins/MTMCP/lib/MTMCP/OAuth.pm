@@ -10,8 +10,15 @@ my $json = JSON->new->ascii->canonical;
 use constant CODE_DURATION  => 600;      # 認可コードの有効期限: 10分
 use constant TOKEN_DURATION => 604800;   # アクセストークンの有効期限: 7日
 
+# 既知の MCP クライアントがクラウド側（ローカルではない）で OAuth を完結させる
+# 際に使う、ベンダー自身が管理する固定のHTTPSコールバックURL。
+# 任意の外部ホストを許可するわけではなく、完全一致のもののみを個別に信頼する。
+my %KNOWN_HTTPS_REDIRECT_URIS = map { $_ => 1 } (
+    'https://www.cursor.com/agents/mcp/oauth/callback',   # Cursor Background Agent
+);
+
 # ネイティブ／ローカルアプリ向け OAuth のリダイレクト規約（RFC 8252）に従い、
-# 以下の2パターンのみ許可する。任意の http(s) 外部ホストへのリダイレクトは
+# 以下のパターンのみ許可する。任意の http(s) 外部ホストへのリダイレクトは
 # オープンリダイレクト・トークン漏えいの原因になるため許可しない。
 #
 #   1. ループバックリダイレクト（RFC 8252 §7.3）:
@@ -21,6 +28,8 @@ use constant TOKEN_DURATION => 604800;   # アクセストークンの有効期�
 #      ハンドラで自アプリに戻ってくる方式。http/https 以外のスキームは
 #      任意のWebサイトには遷移できず、OSに登録された特定アプリにのみ
 #      渡されるため許可する。
+#   3. 既知クライアントの固定HTTPSコールバック（完全一致のみ）:
+#      %KNOWN_HTTPS_REDIRECT_URIS を参照。
 sub is_valid_redirect_uri {
     my ($uri) = @_;
     return 0 unless defined $uri && length $uri;
@@ -31,6 +40,8 @@ sub is_valid_redirect_uri {
         my $scheme = lc $1;
         return 1 if $scheme ne 'http' && $scheme ne 'https';
     }
+
+    return 1 if $KNOWN_HTTPS_REDIRECT_URIS{$uri};
 
     return 0;
 }
