@@ -19,8 +19,16 @@
       <button type="button" id="mtmcp-copy-btn" class="btn btn-default"
               onclick="mtmcpCopy()">コピー</button>
     </div>
-    <p class="hint mt-2">Cursor の mcp.json に追加:</p>
-    <pre id="mtmcp-config-example" class="bg-white p-2" style="font-size:11px;overflow-x:auto;"></pre>
+
+    <p class="hint mt-2">
+      Cursor（<code>~/.cursor/mcp.json</code>）・Claude Desktop（<code>claude_desktop_config.json</code>）
+      どちらも、<code>mcpServers</code> にこのままコピーして貼り付けられます:
+    </p>
+    <div style="position:relative;max-width:640px;">
+      <pre id="mtmcp-config-example" class="bg-white p-2" style="font-size:11px;overflow-x:auto;"></pre>
+      <button type="button" id="mtmcp-config-copy-btn" class="btn btn-default"
+              onclick="mtmcpConfigCopy()">JSONをコピー</button>
+    </div>
   </div>
 
   <div id="mtmcp-error" class="text-danger mt-2" style="display:none;"></div>
@@ -52,8 +60,20 @@
         .then(function (data) {
             if (data.token) {
                 document.getElementById('mtmcp-token-value').value = data.token;
+
+                var config = {
+                    mcpServers: {
+                        'movable-type': {
+                            type: 'sse',
+                            url: data.mcp_url,
+                            headers: {
+                                Authorization: 'Bearer ' + data.token
+                            }
+                        }
+                    }
+                };
                 document.getElementById('mtmcp-config-example').textContent =
-                    '"Authorization": "Bearer ' + data.token + '"';
+                    JSON.stringify(config, null, 2);
                 document.getElementById('mtmcp-result').style.display = 'block';
             } else {
                 document.getElementById('mtmcp-error').textContent = data.error || 'エラーが発生しました';
@@ -78,6 +98,21 @@
         var btn = document.getElementById('mtmcp-copy-btn');
         btn.textContent = 'コピーしました';
         setTimeout(function () { btn.textContent = 'コピー'; }, 2000);
+    };
+
+    window.mtmcpConfigCopy = function () {
+        var text = document.getElementById('mtmcp-config-example').textContent;
+        navigator.clipboard.writeText(text).catch(function () {
+            var range = document.createRange();
+            range.selectNode(document.getElementById('mtmcp-config-example'));
+            window.getSelection().removeAllRanges();
+            window.getSelection().addRange(range);
+            document.execCommand('copy');
+            window.getSelection().removeAllRanges();
+        });
+        var btn = document.getElementById('mtmcp-config-copy-btn');
+        btn.textContent = 'コピーしました';
+        setTimeout(function () { btn.textContent = 'JSONをコピー'; }, 2000);
     };
 }());
 </script>
