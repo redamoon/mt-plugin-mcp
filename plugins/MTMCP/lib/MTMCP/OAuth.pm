@@ -120,6 +120,47 @@ sub handle_token {
     });
 }
 
+# POST /v4/mcp/register — Dynamic Client Registration (RFC 7591)。
+# クライアントの事前登録は行わず、redirect_uri（ループバックのみ許可）と
+# PKCE で安全性を担保しているため、リクエストされた内容をそのまま認めて
+# ランダムな client_id を発行するだけの簡易実装。client_secret は発行しない
+# （PKCE を使うパブリッククライアント向けの token_endpoint_auth_method=none）。
+sub handle_register {
+    my ($app) = @_;
+
+    unless ($app->request_method eq 'POST') {
+        return _oauth_error($app, 405, 'invalid_request', 'Method Not Allowed');
+    }
+
+    my $body = $app->param('POSTDATA') // $app->request_content // '';
+    my $data = eval { $json->decode($body) };
+    $data = {} unless ref($data) eq 'HASH';
+
+    my $redirect_uris = $data->{redirect_uris};
+    if (ref($redirect_uris) eq 'ARRAY' && @$redirect_uris) {
+        for my $uri (@$redirect_uris) {
+            unless (is_valid_redirect_uri($uri)) {
+                return _respond($app, 400, {
+                    error             => 'invalid_redirect_uri',
+                    error_description => "redirect_uri not allowed: $uri",
+                });
+            }
+        }
+    } else {
+        $redirect_uris = [];
+    }
+
+    return _respond($app, 201, {
+        client_id                    => _random_token(),
+        client_id_issued_at          => time(),
+        redirect_uris                => $redirect_uris,
+        token_endpoint_auth_method   => 'none',
+        grant_types                  => ['authorization_code'],
+        response_types               => ['code'],
+        client_name                  => $data->{client_name} // 'MCP Client',
+    });
+}
+
 sub _random_token {
     return sha256_hex(rand() . time() . $$ . int(rand(1_000_000)));
 }

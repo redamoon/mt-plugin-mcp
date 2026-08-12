@@ -146,13 +146,14 @@ MCP クライアント自体にパスワードを一切渡さない方式です�
 >   "issuer": "https://example.com",
 >   "authorization_endpoint": "https://example.com/mt/mt.cgi?__mode=mcp_authorize",
 >   "token_endpoint": "https://example.com/mt/mt-data-api.cgi/v4/mcp/token",
+>   "registration_endpoint": "https://example.com/mt/mt-data-api.cgi/v4/mcp/register",
 >   "response_types_supported": ["code"],
 >   "grant_types_supported": ["authorization_code"],
 >   "code_challenge_methods_supported": ["S256"],
 >   "token_endpoint_auth_methods_supported": ["none"]
 > }
 > ```
-> これらは静的ファイルとして Web サーバーのドキュメントルート直下（`/.well-known/`）に配置してください（MT のバージョン管理下の `/mt-data-api.cgi/v4/...` の外側にある必要があります）。
+> これらは静的ファイルとして Web サーバーのドキュメントルート直下（`/.well-known/`）に配置してください（MT のバージョン管理下の `/mt-data-api.cgi/v4/...` の外側にある必要があります）。`registration_endpoint`（`POST /v4/mcp/register`）は RFC 7591 の Dynamic Client Registration に対応しており、Cursor など事前登録なしで OAuth を試みるクライアントが自動的にクライアントIDを取得できます（client_secret は発行しません＝PKCEを使うパブリッククライアント向け）。
 
 #### 方法B: ログインAPIで直接発行（非対話・自動化向け）
 
@@ -347,3 +348,4 @@ plugins/MTMCP/
 | ツール呼び出しで `この操作を行う権限がありません` | トークンに紐づくユーザーが対象ブログの権限を持っていない | 対象ブログの権限を持つユーザーでトークンを再発行するか、MT側でブログ権限を付与 |
 | `redirect_uri is not allowed`（OAuth認可時） | `redirect_uri` がループバック（127.0.0.1 / localhost / [::1]）以外 | クライアント側の redirect_uri をループバックアドレスに変更 |
 | `invalid_grant`（トークン交換時） | 認可コードの期限切れ（10分）・使用済み・`code_verifier`不一致・`redirect_uri`不一致 | 認可フローを最初からやり直す |
+| `Incompatible auth server: does not support dynamic client registration`（Cursor） | `oauth-authorization-server` に `registration_endpoint` が含まれていない | `.well-known/oauth-authorization-server` に `registration_endpoint` を追加（本READMEのサンプル参照） |
