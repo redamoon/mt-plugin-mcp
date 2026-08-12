@@ -7,9 +7,11 @@ use constant HOLD    => 1;
 
 sub list {
     my ($app, $args) = @_;
-    my $ct_id  = $args->{content_type_id} or die "content_type_id is required\n";
-    my $limit  = $args->{limit}  // 20;
-    my $status = $args->{status} // 'publish';
+    my $ct_id   = $args->{content_type_id} or die "content_type_id is required\n";
+    my $limit   = $args->{limit}   // 20;
+    my $offset  = $args->{offset}  // 0;
+    my $status  = $args->{status}  // 'publish';
+    my $keyword = $args->{keyword};
 
     require MT::ContentData;
     my %terms = (content_type_id => $ct_id);
@@ -17,12 +19,35 @@ sub list {
     $terms{status}  = RELEASE() if $status eq 'publish';
     $terms{status}  = HOLD()    if $status eq 'draft';
 
-    my @cds = MT::ContentData->load(\%terms, {
-        limit     => $limit,
-        sort      => 'authored_on',
-        direction => 'descend',
-    });
+    my %load_opts = ( sort => 'authored_on', direction => 'descend' );
+    if ($keyword) {
+        $load_opts{limit} = 500;
+    } else {
+        $load_opts{limit}  = $limit;
+        $load_opts{offset} = $offset;
+    }
+
+    my @cds = MT::ContentData->load(\%terms, \%load_opts);
+
+    if ($keyword) {
+        my $kw = lc $keyword;
+        @cds = grep {
+            my $data = $_->data // {};
+            grep { defined $_ && index(lc("$_"), $kw) >= 0 } values %$data;
+        } @cds;
+        @cds = splice(@cds, $offset, $limit);
+    }
+
     return [ map { _to_hash($_) } @cds ];
+}
+
+sub remove {
+    my ($app, $args) = @_;
+    my $cd_id = $args->{content_data_id} or die "content_data_id is required\n";
+    require MT::ContentData;
+    my $cd = MT::ContentData->load($cd_id) or die "ContentData not found: $cd_id\n";
+    $cd->remove or die $cd->errstr . "\n";
+    return { content_data_id => $cd_id, status => 'deleted' };
 }
 
 sub get {
