@@ -47,7 +47,7 @@ sub dispatch {
         return _result($id, {
             protocolVersion => $PROTOCOL_VERSION,
             capabilities    => { tools => { listChanged => JSON::false } },
-            serverInfo      => { name => 'MT MCP Server', version => '0.3.0' },
+            serverInfo      => { name => 'MT MCP Server', version => '0.4.0' },
         });
     }
 
@@ -213,7 +213,7 @@ sub _tool_definitions {
         },
         {
             name        => 'asset_upload',
-            description => 'ファイルをアップロードして新規アセットを作成する。data には Base64 エンコードしたファイル内容を渡す。画像拡張子（jpg/jpeg/png/gif/bmp/webp/svg）は自動的に画像アセットとして登録される。',
+            description => 'ファイルをアップロードして新規アセットを作成する。data には Base64 エンコードしたファイル内容を渡す（最大20MB）。許可される拡張子: jpg/jpeg/png/gif/bmp/webp/ico/tif/tiff/pdf/txt/csv/md/doc/docx/xls/xlsx/ppt/pptx/zip/mp3/mp4/mov/avi/wav/ogg/webm（実行可能ファイルやSVGは安全のため許可されない）。画像拡張子は自動的に画像アセットとして登録される。',
             inputSchema => {
                 type     => 'object',
                 required => ['blog_id', 'file_name', 'data'],

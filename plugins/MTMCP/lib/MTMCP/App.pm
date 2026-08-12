@@ -111,14 +111,19 @@ sub _check_auth {
 
     require MTMCP::Auth;
     my $author = MTMCP::Auth::resolve_author($session);
-    if ($author) {
-        require MT::Author;
-        unless ($author->status == MT::Author::ACTIVE()) {
-            return _respond($app, 401, { error => 'User account is not active' });
-        }
-        $app->user($author);
+    unless ($author) {
+        # author_id が紐づかない旧形式トークンはブログ権限チェック（MTMCP::Perm）を
+        # 回避できてしまうため、互換動作させず拒否する。再発行を促す。
+        return _respond($app, 401, {
+            error             => 'Invalid token',
+            error_description => 'This token was issued by an older version of this plugin and is no longer accepted. Please reissue a token.',
+        });
     }
-    # author_id が紐づかない旧形式トークンは互換のため通す（$app->user は未設定のまま）
+    require MT::Author;
+    unless ($author->status == MT::Author::ACTIVE()) {
+        return _respond($app, 401, { error => 'User account is not active' });
+    }
+    $app->user($author);
 
     return undef;
 }

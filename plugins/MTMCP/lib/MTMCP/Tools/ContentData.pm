@@ -5,6 +5,11 @@ use warnings;
 use constant RELEASE => 2;
 use constant HOLD    => 1;
 
+# キーワード検索時にPerl側でスキャンする最大件数。DB側でのLIKE検索ではなく
+# 直近のレコードをこの件数までロードしてから絞り込むため、これを超えて
+# 古いレコードにしかマッチしないキーワードは検出できない（既知の制約）。
+use constant KEYWORD_SCAN_LIMIT => 2000;
+
 sub list {
     my ($app, $args) = @_;
     my $ct_id   = $args->{content_type_id} or die "content_type_id is required\n";
@@ -18,8 +23,8 @@ sub list {
     my $check_blog_id = $args->{blog_id};
     unless ($check_blog_id) {
         require MT::ContentType;
-        my $ct = MT::ContentType->load($ct_id);
-        $check_blog_id = $ct->blog_id if $ct;
+        my $ct = MT::ContentType->load($ct_id) or die "ContentType not found: $ct_id\n";
+        $check_blog_id = $ct->blog_id;
     }
     MTMCP::Perm::require_blog_access($app, $check_blog_id);
 
@@ -30,7 +35,7 @@ sub list {
 
     my %load_opts = ( sort => 'authored_on', direction => 'descend' );
     if ($keyword) {
-        $load_opts{limit} = 500;
+        $load_opts{limit} = KEYWORD_SCAN_LIMIT;
     } else {
         $load_opts{limit}  = $limit;
         $load_opts{offset} = $offset;

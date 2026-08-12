@@ -2,7 +2,7 @@ package MTMCP::OAuth;
 use strict;
 use warnings;
 use JSON;
-use Digest::SHA qw(sha256 sha256_hex);
+use Digest::SHA qw(sha256);
 use MIME::Base64 qw(encode_base64);
 
 my $json = JSON->new->ascii->canonical;
@@ -33,6 +33,11 @@ my %KNOWN_HTTPS_REDIRECT_URIS = map { $_ => 1 } (
 sub is_valid_redirect_uri {
     my ($uri) = @_;
     return 0 unless defined $uri && length $uri;
+
+    # RFC 6749 §3.1.2: redirect_uri にフラグメントを含めてはならない。
+    # 含まれていると code/state がフラグメントとして付与されてしまい、
+    # サーバー側のリダイレクト先アプリに渡らなくなる。
+    return 0 if index($uri, '#') >= 0;
 
     return 1 if $uri =~ m{^http://(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?(?:/|\?|$)}i;
 
@@ -102,6 +107,7 @@ sub handle_token {
     my $code          = $params->{code};
     my $redirect_uri  = $params->{redirect_uri};
     my $code_verifier = $params->{code_verifier};
+    my $client_id     = $params->{client_id} // '';
     unless ($code && $redirect_uri && $code_verifier) {
         return _oauth_error($app, 400, 'invalid_request', 'code, redirect_uri and code_verifier are required');
     }
@@ -115,13 +121,19 @@ sub handle_token {
     }
 
     # 認可コードは一度きり。以降の検証結果に関わらず即座に無効化する。
-    my $stored_redirect  = $session->get('redirect_uri')  // '';
+    my $stored_redirect  = $session->get('redirect_uri')   // '';
     my $stored_challenge = $session->get('code_challenge') // '';
+    my $stored_client_id = $session->get('client_id')      // '';
     my $author_id         = $session->get('author_id');
     $session->remove;
 
     unless ($redirect_uri eq $stored_redirect) {
         return _oauth_error($app, 400, 'invalid_grant', 'redirect_uri mismatch');
+    }
+    # 認可時に記録した client_id とリクエストの client_id を照合し、盗んだ
+    # 認可コードを別クライアントとして引き換える取り違え攻撃を防ぐ。
+    unless ($client_id eq $stored_client_id) {
+        return _oauth_error($app, 400, 'invalid_grant', 'client_id mismatch');
     }
     unless (verify_pkce($code_verifier, $stored_challenge)) {
         return _oauth_error($app, 400, 'invalid_grant', 'code_verifier mismatch');
@@ -134,7 +146,11 @@ sub handle_token {
     }
 
     require MTMCP::Auth;
-    my $token = MTMCP::Auth::issue_token_for($author);
+    my $token = eval { MTMCP::Auth::issue_token_for($author) };
+    unless ($token) {
+        warn "MTMCP: token issuance failed during OAuth exchange: $@";
+        return _oauth_error($app, 500, 'server_error', 'Could not issue access token');
+    }
 
     return _respond($app, 200, {
         access_token => $token,
@@ -187,7 +203,8 @@ sub handle_register {
 }
 
 sub _random_token {
-    return sha256_hex(rand() . time() . $$ . int(rand(1_000_000)));
+    require MTMCP::Auth;
+    return MTMCP::Auth::secure_random_hex(32);
 }
 
 sub _parse_body {
@@ -222,6 +239,9 @@ sub _respond {
     $app->set_header('Access-Control-Allow-Origin'  => '*');
     $app->set_header('Access-Control-Allow-Methods' => 'GET, POST, OPTIONS');
     $app->set_header('Access-Control-Allow-Headers' => 'Authorization, Content-Type');
+    # RFC 6749 §5.1: トークンを含む応答はキャッシュされてはならない
+    $app->set_header('Cache-Control' => 'no-store');
+    $app->set_header('Pragma'        => 'no-cache');
     $app->response_code($status);
     $app->set_header('Content-Type' => 'application/json; charset=UTF-8');
     return $json->encode($data);

@@ -4,6 +4,21 @@ use warnings;
 use JSON;
 use Digest::SHA qw(sha256_hex);
 
+# 暗号論的に安全な乱数を /dev/urandom から取得する。安全な乱数源が
+# 利用できない環境では、弱い乱数へフォールバックせず失敗させる
+# （トークン・認可コードの推測可能性はセキュリティ上致命的なため）。
+sub secure_random_hex {
+    my ($bytes) = @_;
+    $bytes //= 32;
+    open(my $fh, '<:raw', '/dev/urandom')
+        or die "Could not open /dev/urandom for secure random generation: $!\n";
+    my $data = '';
+    my $read = read($fh, $data, $bytes);
+    close $fh;
+    die "Could not read secure random bytes\n" unless defined $read && $read == $bytes;
+    return unpack('H*', $data);
+}
+
 my $json = JSON->new->ascii->canonical;
 
 use constant TOKEN_DURATION   => 604800;   # トークン有効期限: 7日
@@ -75,7 +90,7 @@ sub issue_token_for {
 
 sub _issue_token {
     my ($author) = @_;
-    my $token = sha256_hex(rand() . time() . $$ . int(rand(1_000_000)));
+    my $token = secure_random_hex(32);
 
     require MT::Session;
     my $session = MT::Session->new;
@@ -123,6 +138,10 @@ sub _is_locked_out {
     return 1;
 }
 
+# 既知の制約: 読み取り→更新の間に排他制御がないため、並列リクエストでは
+# カウントの取りこぼし（lost update）が起こり得る。ロックアウトは
+# パスワード照合自体の防御を補完する多層防御であり、この残存リスクは
+# 許容する（完全なアトミック更新には別途DBレベルのロックが必要）。
 sub _record_failure {
     my ($username) = @_;
     require MT::Session;
@@ -145,7 +164,7 @@ sub _record_failure {
         $rec->set('count', 1);
         $rec->set('since', $now);
     }
-    $rec->save;
+    $rec->save or warn "MTMCP: failed to record login failure: " . $rec->errstr . "\n";
 }
 
 sub _clear_failures {
@@ -159,6 +178,9 @@ sub _respond {
     $app->set_header('Access-Control-Allow-Origin'  => '*');
     $app->set_header('Access-Control-Allow-Methods' => 'GET, POST, OPTIONS');
     $app->set_header('Access-Control-Allow-Headers' => 'Authorization, Content-Type');
+    # RFC 6749 §5.1: トークンを含む応答はキャッシュされてはならない
+    $app->set_header('Cache-Control' => 'no-store');
+    $app->set_header('Pragma'        => 'no-cache');
     $app->response_code($status);
     $app->set_header('Content-Type' => 'application/json; charset=UTF-8');
     return $json->encode($data);
