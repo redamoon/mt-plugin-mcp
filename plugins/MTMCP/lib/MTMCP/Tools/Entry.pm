@@ -8,13 +8,43 @@ sub list {
     my ($app, $args) = @_;
     my $blog_id = $args->{blog_id} or die "blog_id is required\n";
     my $limit   = $args->{limit}   // 20;
+    my $offset  = $args->{offset}  // 0;
     my $status  = $args->{status}  // 'publish';
+    my $keyword = $args->{keyword};
     my %terms = (blog_id => $blog_id);
     $terms{status} = MT::Entry::RELEASE() if $status eq 'publish';
     $terms{status} = MT::Entry::HOLD()    if $status eq 'draft';
-    my @entries = MT::Entry->load(\%terms,
-        { limit => $limit, sort => 'authored_on', direction => 'descend' });
+
+    my %load_opts = ( sort => 'authored_on', direction => 'descend' );
+    if ($keyword) {
+        # キーワード検索時は候補を多めに取得してから絞り込む
+        $load_opts{limit} = 500;
+    } else {
+        $load_opts{limit}  = $limit;
+        $load_opts{offset} = $offset;
+    }
+
+    my @entries = MT::Entry->load(\%terms, \%load_opts);
+
+    if ($keyword) {
+        my $kw = lc $keyword;
+        @entries = grep {
+            index(lc($_->title // ''), $kw) >= 0
+                || index(lc($_->text // ''), $kw) >= 0
+        } @entries;
+        @entries = splice(@entries, $offset, $limit);
+    }
+
     return [ map { _to_hash($_) } @entries ];
+}
+
+sub remove {
+    my ($app, $args) = @_;
+    my $entry_id = $args->{entry_id} or die "entry_id is required\n";
+    my $entry = MT::Entry->load($entry_id) or die "Entry not found: $entry_id\n";
+    my $title = $entry->title;
+    $entry->remove or die $entry->errstr . "\n";
+    return { entry_id => $entry_id, status => 'deleted', title => $title };
 }
 
 sub get {

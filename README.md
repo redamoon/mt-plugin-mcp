@@ -10,10 +10,11 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | ツール名 | 説明 |
 |---|---|
 | `blog_list` | ブログ（サイト）一覧取得 |
-| `entry_list` | 記事一覧取得 |
+| `entry_list` | 記事一覧取得（`keyword` 部分一致検索・`offset` ページネーション対応） |
 | `entry_get` | 記事1件取得（本文含む） |
 | `entry_create` | 記事作成（デフォルト: 下書き） |
 | `entry_update` | 記事更新 |
+| `entry_delete` | 記事削除 |
 | `category_list` | カテゴリ一覧取得 |
 | `tag_list` | タグ一覧取得 |
 
@@ -21,11 +22,16 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 
 | ツール名 | 説明 |
 |---|---|
-| `asset_list` | アセット一覧取得 |
+| `asset_list` | アセット一覧取得（`keyword` 部分一致検索・`offset` ページネーション対応） |
 | `asset_get` | アセット1件取得 |
-| `template_list` | テンプレート一覧取得 |
+| `asset_upload` | ファイルアップロード（Base64）による新規アセット作成 |
+| `asset_delete` | アセット削除 |
+| `asset_thumbnail` | 画像アセットのサムネイルURL取得（MTの動的リサイズ機能を利用） |
+| `template_list` | テンプレート一覧取得（`keyword` 部分一致検索・`offset` ページネーション対応） |
 | `template_get` | テンプレート1件取得（本文含む） |
+| `template_create` | テンプレート新規作成 |
 | `template_update` | テンプレート本文更新 |
+| `template_delete` | テンプレート削除 |
 
 ### コンテンツタイプ・コンテンツデータ（MT7以降）
 
@@ -33,10 +39,14 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 |---|---|
 | `content_type_list` | コンテンツタイプ一覧取得 |
 | `content_type_get` | コンテンツタイプ詳細取得（フィールド定義含む） |
-| `content_data_list` | コンテンツデータ一覧取得 |
+| `content_type_create` | コンテンツタイプ新規作成 |
+| `content_data_list` | コンテンツデータ一覧取得（`keyword` 部分一致検索・`offset` ページネーション対応） |
 | `content_data_get` | コンテンツデータ1件取得（フィールド値・ラベル含む） |
 | `content_data_create` | コンテンツデータ作成 |
 | `content_data_update` | コンテンツデータ更新（部分更新対応） |
+| `content_data_delete` | コンテンツデータ削除 |
+
+> 削除系ツール（`entry_delete` / `asset_delete` / `template_delete` / `content_data_delete`）は取り消せない操作です。AI が実行する前に対象を一覧・取得系ツールで確認するよう促してください。
 
 ### AI の操作フロー
 
@@ -223,13 +233,20 @@ plugins/MTMCP/
         ├── Protocol.pm     # MCP JSON-RPC ディスパッチャ
         └── Tools/
             ├── Blog.pm         # blog_list
-            ├── Entry.pm        # entry_list / get / create / update
+            ├── Entry.pm        # entry_list / get / create / update / delete
             ├── Category.pm     # category_list / tag_list
-            ├── Asset.pm        # asset_list / get
-            ├── Template.pm     # template_list / get / update
-            ├── ContentType.pm  # content_type_list / get
-            └── ContentData.pm  # content_data_list / get / create / update
+            ├── Asset.pm        # asset_list / get / upload / delete / thumbnail
+            ├── Template.pm     # template_list / get / create / update / delete
+            ├── ContentType.pm  # content_type_list / get / create
+            └── ContentData.pm  # content_data_list / get / create / update / delete
 ```
+
+### asset_upload の注意点
+
+- アップロード先は `blog_id` のブログの `site_path` 配下（デフォルトは `mcp-uploads/` サブディレクトリ）。書き込み権限が必要です。
+- `data` には Base64 エンコードしたファイル内容を渡します。
+- 画像拡張子（jpg / jpeg / png / gif / bmp / webp / svg）は自動的に画像アセットとして登録され、幅・高さの取得を試みます（MT 側で画像処理バックエンド〈Image::Magick / GD / Imager〉が有効な場合）。
+- `asset_thumbnail` は MT の動的サムネイル生成機能を利用するため、同様に画像処理バックエンドの設定が必要です。
 
 ## トラブルシューティング
 
