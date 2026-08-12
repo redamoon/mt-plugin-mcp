@@ -7,8 +7,9 @@ use MIME::Base64 qw(encode_base64);
 
 my $json = JSON->new->ascii->canonical;
 
-use constant CODE_DURATION  => 600;      # 認可コードの有効期限: 10分
-use constant TOKEN_DURATION => 604800;   # アクセストークンの有効期限: 7日
+use constant CODE_DURATION       => 600;                 # 認可コードの有効期限: 10分
+use constant TOKEN_DURATION      => 604800;               # アクセストークンの有効期限: 7日
+use constant CLIENT_REG_DURATION => 10 * 365 * 24 * 3600; # クライアント登録の有効期限: 実質無期限（10年）
 
 # 既知の MCP クライアントがクラウド側（ローカルではない）で OAuth を完結させる
 # 際に使う、ベンダー自身が管理する固定のHTTPSコールバックURL。
@@ -34,6 +35,11 @@ sub is_valid_redirect_uri {
     my ($uri) = @_;
     return 0 unless defined $uri && length $uri;
 
+    # C0制御文字・DELを含むURIは拒否する。スキーム名の直後などに紛れ込ませて
+    # 後続処理（$app->redirect のLocationヘッダー生成など）に予期しない
+    # 挙動を起こさせないため、スキーム判定より前に弾く。
+    return 0 if $uri =~ /[\x00-\x1F\x7F]/;
+
     # RFC 6749 §3.1.2: redirect_uri にフラグメントを含めてはならない。
     # 含まれていると code/state がフラグメントとして付与されてしまい、
     # サーバー側のリダイレクト先アプリに渡らなくなる。
@@ -49,6 +55,45 @@ sub is_valid_redirect_uri {
     return 1 if $KNOWN_HTTPS_REDIRECT_URIS{$uri};
 
     return 0;
+}
+
+# $client_id が Dynamic Client Registration で登録済みの場合は、その
+# redirect_uris への完全一致を要求する（別クライアントの認可コードを
+# 意図しないURLへ誘導する取り違え攻撃を防ぐ）。未登録の client_id
+# （または client_id 未指定）の場合は、既存のグローバルな検証
+# （ループバック／プライベートスキーム／既知の固定HTTPSコールバック）に
+# フォールバックする。
+sub is_valid_redirect_uri_for_client {
+    my ($client_id, $uri) = @_;
+    my $registered = _lookup_client_redirect_uris($client_id);
+    if ($registered && @$registered) {
+        return (grep { $_ eq $uri } @$registered) ? 1 : 0;
+    }
+    return is_valid_redirect_uri($uri);
+}
+
+sub _store_client {
+    my ($client_id, $redirect_uris, $client_name) = @_;
+    require MT::Session;
+    my $session = MT::Session->new;
+    $session->id($client_id);
+    $session->kind('DR');
+    $session->start(time());
+    $session->duration(CLIENT_REG_DURATION);
+    $session->set('redirect_uris', $json->encode($redirect_uris));
+    $session->set('client_name', $client_name // '');
+    $session->save or die "Could not store client registration: " . $session->errstr . "\n";
+    return;
+}
+
+sub _lookup_client_redirect_uris {
+    my ($client_id) = @_;
+    return undef unless defined $client_id && length $client_id;
+    require MT::Session;
+    my $session = MT::Session->load({ id => $client_id, kind => 'DR' });
+    return undef unless $session;
+    my $uris = eval { $json->decode($session->get('redirect_uris') // '[]') };
+    return (ref($uris) eq 'ARRAY') ? $uris : [];
 }
 
 sub base64url_encode {
@@ -162,9 +207,9 @@ sub handle_token {
 }
 
 # POST /v4/mcp/register — Dynamic Client Registration (RFC 7591)。
-# クライアントの事前登録は行わず、redirect_uri（ループバックのみ許可）と
-# PKCE で安全性を担保しているため、リクエストされた内容をそのまま認めて
-# ランダムな client_id を発行するだけの簡易実装。client_secret は発行しない
+# authorization_code フローのみを提供するため、redirect_uris を1つ以上
+# 必須とし、登録された redirect_uris を永続化して認可時に完全一致で
+# 検証する（is_valid_redirect_uri_for_client）。client_secret は発行しない
 # （PKCE を使うパブリッククライアント向けの token_endpoint_auth_method=none）。
 sub handle_register {
     my ($app) = @_;
@@ -175,30 +220,36 @@ sub handle_register {
 
     my $body = $app->param('POSTDATA') // $app->request_content // '';
     my $data = eval { $json->decode($body) };
-    $data = {} unless ref($data) eq 'HASH';
+    if ($@ || ref($data) ne 'HASH') {
+        return _oauth_error($app, 400, 'invalid_client_metadata', 'Request body must be a valid JSON object');
+    }
 
     my $redirect_uris = $data->{redirect_uris};
-    if (ref($redirect_uris) eq 'ARRAY' && @$redirect_uris) {
-        for my $uri (@$redirect_uris) {
-            unless (is_valid_redirect_uri($uri)) {
-                return _respond($app, 400, {
-                    error             => 'invalid_redirect_uri',
-                    error_description => "redirect_uri not allowed: $uri",
-                });
-            }
+    unless (ref($redirect_uris) eq 'ARRAY' && @$redirect_uris) {
+        return _oauth_error($app, 400, 'invalid_redirect_uri', 'redirect_uris must be a non-empty array');
+    }
+    for my $uri (@$redirect_uris) {
+        unless (is_valid_redirect_uri($uri)) {
+            return _oauth_error($app, 400, 'invalid_redirect_uri', "redirect_uri not allowed: $uri");
         }
-    } else {
-        $redirect_uris = [];
+    }
+
+    my $client_id   = _random_token();
+    my $client_name = $data->{client_name} // 'MCP Client';
+    eval { _store_client($client_id, $redirect_uris, $client_name) };
+    if ($@) {
+        warn "MTMCP: client registration failed: $@";
+        return _oauth_error($app, 500, 'server_error', 'Could not register client');
     }
 
     return _respond($app, 201, {
-        client_id                    => _random_token(),
+        client_id                    => $client_id,
         client_id_issued_at          => time(),
         redirect_uris                => $redirect_uris,
         token_endpoint_auth_method   => 'none',
         grant_types                  => ['authorization_code'],
         response_types               => ['code'],
-        client_name                  => $data->{client_name} // 'MCP Client',
+        client_name                  => $client_name,
     });
 }
 
