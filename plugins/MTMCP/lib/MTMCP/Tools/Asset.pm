@@ -96,8 +96,14 @@ sub upload {
         die "Uploaded file exceeds the maximum allowed size (" . MAX_UPLOAD_BYTES . " bytes)\n";
     }
 
+    # MIME::Base64::decode_base64 は不正な文字を黙って無視し $@ も設定しない
+    # ことがあるため、デコード前に文字種・パディングの形式を明示的に検証する。
+    (my $b64_trimmed = $data_b64) =~ s/\s+//g;
+    die "Invalid base64 data\n"
+        unless $b64_trimmed =~ m{\A[A-Za-z0-9+/]*={0,2}\z} && length($b64_trimmed) % 4 == 0;
+
     require MIME::Base64;
-    my $bytes = eval { MIME::Base64::decode_base64($data_b64) };
+    my $bytes = eval { MIME::Base64::decode_base64($b64_trimmed) };
     die "Invalid base64 data\n" if $@ || !defined $bytes || !length $bytes;
     die "Uploaded file exceeds the maximum allowed size (" . MAX_UPLOAD_BYTES . " bytes)\n"
         if length($bytes) > MAX_UPLOAD_BYTES;

@@ -75,8 +75,8 @@ sub _validate {
     my ($q) = @_;
     return 'response_type must be "code"' unless ($q->{response_type} // '') eq 'code';
     return 'redirect_uri is required'      unless length($q->{redirect_uri} // '');
-    return 'redirect_uri is not allowed（ループバックアドレスのみ許可されています）'
-        unless MTMCP::OAuth::is_valid_redirect_uri($q->{redirect_uri});
+    return 'redirect_uri is not allowed'
+        unless MTMCP::OAuth::is_valid_redirect_uri_for_client($q->{client_id}, $q->{redirect_uri});
     return 'code_challenge is required'    unless length($q->{code_challenge} // '');
     return 'code_challenge_method must be S256' unless ($q->{code_challenge_method} // '') eq 'S256';
     return undef;
