@@ -82,20 +82,22 @@ MT を再起動（または `touch mt.cgi`）してプラグインを有効化�
 
 ### 2. Apache の設定
 
-`Authorization` ヘッダーを CGI に渡すために以下いずれかが必要です。
+`Authorization` ヘッダーを CGI に渡すために以下いずれかが必要です。**トークンの取得方法（OAuth / ログインAPI / 管理画面）に関わらず、ツール呼び出し本体（`/v4/mcp`）に `Authorization: Bearer <token>` を渡すために必須**です。OAuthを使う場合でも省略できません。
 
-**方法 A: VirtualHost / Directory ブロックに追記**
+**設定パターン1: VirtualHost / Directory ブロックに追記**
 ```apache
 <Directory "/var/www/html/mt">
     CGIPassAuth On
 </Directory>
 ```
 
-**方法 B: `.htaccess` に追記**（サーバ設定を変更できない場合）
+**設定パターン2: `.htaccess` に追記**（サーバ設定を変更できない場合）
 ```apache
 RewriteEngine On
 RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 ```
+
+> どちらも設定できない場合は、`Authorization` の代わりに `X-MT-Authorization: MTAuth accessToken=<token>` ヘッダーを使う方法もあります（後述「認証ヘッダー」参照）。カスタムヘッダーは Apache の追加設定なしでそのまま CGI に渡ります。
 
 ### 3. アクセストークンを発行
 
@@ -156,6 +158,14 @@ MCP クライアント自体にパスワードを一切渡さない方式です�
 > ```
 > これらは静的ファイルとして Web サーバーのドキュメントルート直下（`/.well-known/`）に配置してください（MT のバージョン管理下の `/mt-data-api.cgi/v4/...` の外側にある必要があります）。`registration_endpoint`（`POST /v4/mcp/register`）は RFC 7591 の Dynamic Client Registration に対応しており、Cursor など事前登録なしで OAuth を試みるクライアントが自動的にクライアントIDを取得できます（client_secret は発行しません＝PKCEを使うパブリッククライアント向け）。
 
+#### IPアドレス制限があるMT環境での注意
+
+Cursor の「Background Agent」のようにクラウド側で動作するMCPクライアントを使う場合、OAuthの一部リクエスト（`.well-known` の取得、`POST /v4/mcp/register`、`POST /v4/mcp/token`）は**ユーザー本人のブラウザではなく、クライアント（Cursorなど）のサーバー自身から**送信されます。MT サーバーに IP アドレス制限（ファイアウォール・WAF・`Require ip` 等）をかけている場合は、これらのエンドポイントに対してそのクライアントのサーバー送信元IPを許可する必要があります。
+
+- 認可画面（`GET /mt.cgi?__mode=mcp_authorize` とその後の `POST`）は、ユーザー本人のブラウザからのアクセスなので、通常どおり管理者の端末からのみ許可されていれば問題ありません。
+- `.well-known/*`、`POST /v4/mcp/register`、`POST /v4/mcp/token` は、クライアントのサーバーからのアクセスを許可する必要があります。許可すべき具体的なIPレンジは各クライアント（Cursor等）の公式ドキュメントを参照してください（変更されることがあるため、本READMEには固定のIPを記載しません）。
+- IPレンジの継続的な追従が難しい場合は、`.well-known` を公開せず（前述「方法B」または「方法C」に絞る）、OAuthの自動検出を使わない運用も選択肢です。
+
 #### 方法B: ログインAPIで直接発行（非対話・自動化向け）
 
 ブラウザを開けない CLI・CI などから、ユーザー名・パスワードで直接トークンを取得できます。
@@ -194,6 +204,22 @@ MT 管理画面で **システム > プラグイン > MT MCP Server** を開き�
 
 #### Cursor (`~/.cursor/mcp.json`)
 
+**OAuth自動ログイン（推奨・動作確認済み）**
+
+`.well-known` を設置済みなら、`headers` を書かずにこれだけで接続できます。接続時にブラウザが自動的に開き、MTへのログイン → 許可画面 → 接続、という流れになります（本READMEのトラブルシューティングは主にこの方式の実機検証で得た知見です）。
+
+```json
+{
+  "mcpServers": {
+    "movable-type": {
+      "url": "https://example.com/mt/mt-data-api.cgi/v4/mcp"
+    }
+  }
+}
+```
+
+**手動トークン方式（`.well-known` 未設置の場合・フォールバック）**
+
 ```json
 {
   "mcpServers": {
@@ -209,6 +235,8 @@ MT 管理画面で **システム > プラグイン > MT MCP Server** を開き�
 ```
 
 #### Claude Desktop (`claude_desktop_config.json`)
+
+OAuth自動ログインに対応しているかは未検証のため、まずは手動トークン方式を推奨します。
 
 ```json
 {
