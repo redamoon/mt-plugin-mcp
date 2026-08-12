@@ -22,7 +22,11 @@
 
     <p class="hint mt-2">
       Cursor（<code>~/.cursor/mcp.json</code>）・Claude Desktop（<code>claude_desktop_config.json</code>）
-      どちらも、<code>mcpServers</code> にこのままコピーして貼り付けられます:
+      向けの設定です。設定ファイルがまだ無い・MCPサーバーを他に登録していない場合は、
+      このJSON全体をそのままファイルに貼り付けてください。既に他のMCPサーバーを
+      設定済みの場合は、全体を貼り付けずに <code>movable-type</code> の項目だけを
+      既存の <code>mcpServers</code> オブジェクトの中にコピーしてください
+      （そのまま貼ると <code>mcpServers</code> が二重にネストされてしまいます）。
     </p>
     <div style="position:relative;max-width:640px;">
       <pre id="mtmcp-config-example" class="bg-white p-2" style="font-size:11px;overflow-x:auto;"></pre>
@@ -102,17 +106,30 @@
 
     window.mtmcpConfigCopy = function () {
         var text = document.getElementById('mtmcp-config-example').textContent;
-        navigator.clipboard.writeText(text).catch(function () {
+
+        var fallbackCopy = function () {
             var range = document.createRange();
             range.selectNode(document.getElementById('mtmcp-config-example'));
             window.getSelection().removeAllRanges();
             window.getSelection().addRange(range);
-            document.execCommand('copy');
+            var copied = document.execCommand('copy');
             window.getSelection().removeAllRanges();
-        });
-        var btn = document.getElementById('mtmcp-config-copy-btn');
-        btn.textContent = 'コピーしました';
-        setTimeout(function () { btn.textContent = 'JSONをコピー'; }, 2000);
+            return copied;
+        };
+
+        var showCopied = function () {
+            var btn = document.getElementById('mtmcp-config-copy-btn');
+            btn.textContent = 'コピーしました';
+            setTimeout(function () { btn.textContent = 'JSONをコピー'; }, 2000);
+        };
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(showCopied, function () {
+                if (fallbackCopy()) { showCopied(); }
+            });
+        } else if (fallbackCopy()) {
+            showCopied();
+        }
     };
 }());
 </script>

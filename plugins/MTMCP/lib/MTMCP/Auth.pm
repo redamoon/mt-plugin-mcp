@@ -138,16 +138,40 @@ sub resolve_author {
     return MT::Author->load($author_id);
 }
 
-# リフレッシュトークンを検証する。有効なら MT::Session オブジェクトを返す
-# （呼び出し側でローテーションのため remove すること）。無効・期限切れなら undef。
+# リフレッシュトークンを検証し、原子的に一度きり消費する。
+# 有効期限チェックの後、専用の「消費済みマーカー」行を主キー重複を利用して
+# 作成することで消費を原子的に行う（同一トークンに対する並列リクエストの
+# うち1つだけが消費に成功する）。成功したときだけ元のセッション（呼び出し
+# 側は既に消費済みとして扱ってよい。remove は本関数内で完了している）を
+# 返す。無効・期限切れ・既に消費済みなら undef。
 sub resolve_refresh_session {
     my ($refresh_token) = @_;
     return undef unless defined $refresh_token && length $refresh_token;
+
     require MT::Session;
     my $session = MT::Session->load({ id => $refresh_token, kind => 'DT' });
     return undef unless $session;
     return undef if $session->start + $session->duration < time();
+
+    return undef unless _claim_refresh_token($refresh_token);
+
+    $session->remove;
     return $session;
+}
+
+# $refresh_token に対応する「消費済みマーカー」行を作成しようとする。
+# 同じ id・kind の行の作成は主キー重複エラーで失敗するため、並列リクエスト
+# のうち最初の1つだけが成功する（DBのUNIQUE制約に依存する、DB非依存で
+# 信頼できる原子性の担保方法）。
+sub _claim_refresh_token {
+    my ($refresh_token) = @_;
+    require MT::Session;
+    my $claim = MT::Session->new;
+    $claim->id('mcprtclaim:' . sha256_hex($refresh_token));
+    $claim->kind('DU');
+    $claim->start(time());
+    $claim->duration(REFRESH_TOKEN_DURATION);
+    return $claim->save ? 1 : 0;
 }
 
 sub _fail_key {

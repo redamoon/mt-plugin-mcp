@@ -230,13 +230,14 @@ sub _handle_refresh_token_grant {
     }
 
     require MTMCP::Auth;
+    # resolve_refresh_session は原子的に一度きり消費するため、成功時点で
+    # 既にトークンは無効化されている（ここで remove する必要はない）。
     my $session = MTMCP::Auth::resolve_refresh_session($refresh_token);
     unless ($session) {
         return _oauth_error($app, 400, 'invalid_grant', 'Refresh token is invalid or expired');
     }
 
     my $author_id = $session->get('author_id');
-    $session->remove;
 
     require MT::Author;
     my $author = $author_id && MT::Author->load($author_id);
@@ -302,7 +303,7 @@ sub handle_register {
         client_id_issued_at          => time(),
         redirect_uris                => $redirect_uris,
         token_endpoint_auth_method   => 'none',
-        grant_types                  => ['authorization_code'],
+        grant_types                  => ['authorization_code', 'refresh_token'],
         response_types               => ['code'],
         client_name                  => $client_name,
     });
