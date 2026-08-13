@@ -248,7 +248,38 @@ MT 管理画面で **システム > プラグイン > MT MCP Server** を開き�
 
 #### Claude Desktop (`claude_desktop_config.json`)
 
-OAuth自動ログインに対応しているかは未検証のため、まずは手動トークン方式を推奨します。
+**実機確認の結果、`claude_desktop_config.json` はこのような `type`/`url`/`headers` 形式のリモートMCPサーバー定義をサポートしていません。** 該当エントリは「有効なMCPサーバー設定ではない」として無視されます。Claude Desktopでリモート（HTTP/SSE）のMCPサーバーを使う場合は、この設定ファイルを直接編集するのではなく、アプリ内の「設定 → コネクタ」のようなUIから追加する必要があるとみられます（具体的な手順はバージョンにより異なる可能性があり、本READMEでは検証できていません）。
+
+MTサーバーがHTTPS未対応（例: ローカルDockerで `http://localhost:PORT` のみ）の場合は、コネクタUI経由でも接続できない可能性が高いです。その場合は、以下の「ローカル環境（HTTPS未対応）の場合」を参照してください。
+
+##### ローカル環境（HTTPS未対応）の場合
+
+MTがローカルDocker等で動いていて `http://localhost:PORT` にしかアクセスできない場合、`command`/`args` によるローカル起動のMCPサーバー（Claude Desktopが標準サポートする形式）として、付属のブリッジスクリプトを使う方法があります。HTTPS化は不要です。
+
+`tools/claude-desktop-bridge/mt-mcp-bridge.js`（Node.js標準ライブラリのみ、追加インストール不要）が、標準入出力（stdio）とMTのHTTPエンドポイントの間を中継します。
+
+```json
+{
+  "mcpServers": {
+    "movable-type": {
+      "command": "node",
+      "args": ["/absolute/path/to/mt-plugin-mcp/tools/claude-desktop-bridge/mt-mcp-bridge.js"],
+      "env": {
+        "MT_MCP_URL": "http://localhost:10000/mt-data-api.cgi/v4/mcp",
+        "MT_MCP_TOKEN": "<発行したトークン>"
+      }
+    }
+  }
+}
+```
+
+- `MT_MCP_URL` はDocker等で公開しているMTの実際のURL（`v4/mcp` まで含む）に置き換えてください。
+- `MT_MCP_TOKEN` は方法A〜Cいずれかで発行したトークンです（有効期限7日。切れたら再発行してこの値を更新してください。`refresh_token` によるこのスクリプト自体の自動更新には対応していません）。
+- `args` のパスは絶対パスで指定してください。
+
+#### Claude Code（CLI）
+
+`.mcp.json` またはプロジェクト設定でリモートMCPサーバーを直接指定できます。MTがHTTPS対応の公開URLを持つ場合は、Cursorと同様の方法A/Bの設定で動作する可能性があります（未検証）。ローカルDocker等でHTTPS未対応の場合は、上記のブリッジスクリプトを `command`/`args` で指定する方法が使えます。
 
 ```json
 {
@@ -370,6 +401,10 @@ plugins/MTMCP/
             ├── Template.pm     # template_list / get / create / update / delete
             ├── ContentType.pm  # content_type_list / get / create
             └── ContentData.pm  # content_data_list / get / create / update / delete
+
+tools/
+└── claude-desktop-bridge/
+    └── mt-mcp-bridge.js  # Claude Desktop用stdio<->HTTPブリッジ（HTTPS未対応のローカル環境向け）
 ```
 
 ### asset_upload の注意点
@@ -399,3 +434,4 @@ plugins/MTMCP/
 | `invalid_grant`: `client_id mismatch`（トークン交換時） | 認可時と異なる `client_id` でトークン交換を試みた | `/authorize` と `/token` で同じ `client_id` を使用する |
 | `invalid_grant`: `Refresh token is invalid or expired` | `refresh_token` が期限切れ（30日）・使用済み（ローテーション済み）・不正な値 | 認可フロー（またはログインAPI）を最初からやり直して新しいトークンを取得する |
 | アップロードで `File extension not allowed` | 許可されていない拡張子（実行可能ファイルや`.svg`など）を指定した | 許可拡張子（README「asset_uploadの注意点」参照）に変換してからアップロード |
+| Claude Desktopで「有効なMCPサーバー設定ではないため、スキップされました」 | `claude_desktop_config.json` は `type`/`url`/`headers` によるリモートサーバー定義をサポートしていない | アプリのコネクタ設定UIから追加するか、HTTPS未対応のローカル環境なら `tools/claude-desktop-bridge/` のブリッジスクリプトを使う |
