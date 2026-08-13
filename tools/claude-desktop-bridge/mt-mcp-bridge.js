@@ -57,7 +57,13 @@ try {
     process.exit(1);
 }
 
+if (target.protocol !== 'http:' && target.protocol !== 'https:') {
+    process.stderr.write('[mt-mcp-bridge] Invalid MT_MCP_URL: protocol must be http: or https: (got ' + target.protocol + ')\n');
+    process.exit(1);
+}
+
 const client = target.protocol === 'https:' ? https : http;
+const REQUEST_TIMEOUT_MS = 15000;
 
 // MCP の stdio トランスポートは改行区切りの JSON-RPC メッセージを使う。
 const rl = readline.createInterface({ input: process.stdin, terminal: false });
@@ -67,6 +73,41 @@ rl.on('line', (line) => {
     if (!trimmed) {
         return;
     }
+
+    let message;
+    try {
+        message = JSON.parse(trimmed);
+    } catch (err) {
+        // 送られてきた行そのものがJSONとして壊れている場合、対応する id が
+        // 分からないため JSON-RPC の慣例に従い id: null で parse error を返す。
+        process.stderr.write('[mt-mcp-bridge] Invalid JSON from stdin: ' + err.message + '\n');
+        process.stdout.write(JSON.stringify({
+            jsonrpc: '2.0',
+            id: null,
+            error: { code: -32700, message: 'Parse error' },
+        }) + '\n');
+        return;
+    }
+
+    // 通知（id を持たないメッセージ）には応答を返さないのが JSON-RPC の
+    // 仕様。それ以外（id を持つリクエスト）は、上流で何が起きても必ず
+    // 何らかの応答を返す（さもないと Claude Desktop が応答を待ち続ける）。
+    const hasId = Object.prototype.hasOwnProperty.call(message, 'id');
+    let responded = false;
+    const fail = (errMessage) => {
+        if (responded) {
+            return;
+        }
+        responded = true;
+        process.stderr.write('[mt-mcp-bridge] ' + errMessage + '\n');
+        if (hasId) {
+            process.stdout.write(JSON.stringify({
+                jsonrpc: '2.0',
+                id: message.id,
+                error: { code: -32000, message: errMessage },
+            }) + '\n');
+        }
+    };
 
     const body = Buffer.from(trimmed, 'utf8');
     const req = client.request(target, {
@@ -80,23 +121,33 @@ rl.on('line', (line) => {
         const chunks = [];
         res.on('data', (chunk) => chunks.push(chunk));
         res.on('end', () => {
+            if (responded) {
+                return;
+            }
             const text = Buffer.concat(chunks).toString('utf8').trim();
-            if (res.statusCode >= 400) {
-                process.stderr.write('[mt-mcp-bridge] HTTP ' + res.statusCode + ': ' + text + '\n');
+            // 2xx 以外（3xxのリダイレクトも含む）は失敗として扱う。
+            if (res.statusCode < 200 || res.statusCode >= 300) {
+                fail('HTTP ' + res.statusCode + ': ' + text);
                 return;
             }
             // 通知（notifications/*）には応答本文が無い（204/空ボディ）。
             // その場合は stdout に何も書き出さない（JSON-RPC の通知には
             // レスポンスを返さないのが正しい）。
             if (!text) {
+                responded = true;
                 return;
             }
+            responded = true;
             process.stdout.write(text + '\n');
         });
     });
 
     req.on('error', (err) => {
-        process.stderr.write('[mt-mcp-bridge] Request error: ' + err.message + '\n');
+        fail('Request error: ' + err.message);
+    });
+
+    req.setTimeout(REQUEST_TIMEOUT_MS, () => {
+        req.destroy(new Error('Request timed out after ' + REQUEST_TIMEOUT_MS + 'ms'));
     });
 
     req.write(body);
