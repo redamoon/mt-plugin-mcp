@@ -28,10 +28,24 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `asset_delete` | アセット削除 |
 | `asset_thumbnail` | 画像アセットのサムネイルURL取得（MTの動的リサイズ機能を利用） |
 | `template_list` | テンプレート一覧取得（`keyword` 部分一致検索・`offset` ページネーション対応） |
-| `template_get` | テンプレート1件取得（本文含む） |
-| `template_create` | テンプレート新規作成 |
-| `template_update` | テンプレート本文更新 |
+| `template_get` | テンプレート1件取得（本文・出力ファイル名・識別子・公開方法含む） |
+| `template_create` | テンプレート新規作成（保存前に構文を自動検証） |
+| `template_update` | テンプレート更新（本文・名前・タイプ・出力設定を部分更新、保存前に構文を自動検証） |
 | `template_delete` | テンプレート削除 |
+| `template_validate` | テンプレート構文の検証のみ（保存しない・行番号付きエラー） |
+| `template_preview` | テンプレートをビルドして出力HTMLを取得（ファイルは書き出さない） |
+| `template_tag_list` | その環境で使える MT タグ一覧（プラグイン追加分も含む） |
+
+### 再構築（公開）
+
+| ツール名 | 説明 |
+|---|---|
+| `rebuild_template` | テンプレート1枚を再構築 |
+| `rebuild_entry` | 記事1件を再構築（依存アーカイブ・インデックスも既定で再構築） |
+| `rebuild_content_data` | コンテンツデータ1件を再構築 |
+| `rebuild_site` | ブログ全体を再構築（`archive_type` で範囲を絞り込み可） |
+
+> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` は **「テンプレートの編集」権限**（`edit_templates`）を必要とします（v0.6.0 で追加。従来はブログへのアクセス権限だけで実行できました）。
 
 ### コンテンツタイプ・コンテンツデータ（MT7以降）
 
@@ -63,6 +77,48 @@ AI:       content_type_list → content_type_id を確認
           → content_type_get → フィールドID・型を確認
           → content_data_create(content_type_id, blog_id, fields={...})
 ```
+
+### AI にテンプレートを作らせる
+
+MT テンプレートは独自のタグ言語で書くため、AI が知識だけで書くと存在しないタグや閉じ忘れが混入しがちです。
+本プラグインは「タグを調べる → 検証する → 保存する → 再構築して確認する」というループを AI が自力で回せるように、
+以下のツールを組み合わせて使えるようにしています。
+
+```
+ユーザー: 「記事一覧を出すインデックステンプレートを作って」
+AI:       blog_list          → blog_id を確認
+          template_list      → 既存テンプレートの構成を把握
+          template_get       → 近いテンプレートの書き方を参考にする
+          template_tag_list(keyword="Entry")
+                             → 実際に使えるタグ名を確認
+          template_validate  → 書いた本文の構文をチェック（エラーなら自分で修正して再実行）
+          template_preview   → ビルド結果のHTMLを見て内容を確認
+          template_create    → 保存（このとき再度自動検証される）
+          rebuild_template   → 公開ファイルに反映
+```
+
+ポイント:
+
+- **`template_create` / `template_update` は保存前に必ず構文を検証します。** エラーがあれば保存せず、`<mt:Entries> with no </mt:Entries> on line 12.` のように行番号付きで返します。AI はこのメッセージを読んで自分で修正できます。どうしても検証を通さず保存したい場合のみ `skip_validation: true` を指定してください。
+- **`template_tag_list` はその MT 環境で実際に登録されているタグを返します。** プラグインが追加したタグも含まれるため、AI の学習データに無いタグでも正しく扱えます。素の MT 9 で600件以上あるので `keyword` での絞り込みが前提です。
+- **`template_preview` はファイルを書き出しません。** 公開中のサイトに影響を与えずに出力を確認できます。`individual` など記事コンテキストが必要なテンプレートは `entry_id` を渡してください。
+- **保存しただけでは公開ファイルは更新されません。** 反映するには `rebuild_template` を実行します。
+
+### 再構築の範囲を絞る
+
+MCP は HTTP リクエスト上で動くため、**`rebuild_site`（ブログ全体）は記事数の多いサイトで Web サーバーのタイムアウトに達することがあります。**
+まずは対象を絞ったツールを使ってください。
+
+| やりたいこと | 使うツール |
+|---|---|
+| テンプレートを直したので反映したい | `rebuild_template` |
+| 記事を作成・更新したので公開したい | `rebuild_entry` |
+| コンテンツデータを作成・更新したので公開したい | `rebuild_content_data` |
+| 特定のアーカイブだけ作り直したい | `rebuild_site`（`archive_type` を指定） |
+| デザイン全体を入れ替えたので全部作り直したい | `rebuild_site` |
+
+`rebuild_site` がタイムアウトする場合は、`archive_type`（`Individual` / `Monthly` / `Category` / `Page` など）で分割して実行するか、MT 管理画面から再構築してください。
+なお `rebuild_template` はアーカイブテンプレートに対しても使えます（テンプレートマップで結び付いているアーカイブタイプだけを再構築します）。
 
 ## 動作環境
 
@@ -378,6 +434,38 @@ curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -d '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"content_data_create","arguments":{"content_type_id":1,"blog_id":1,"status":"draft","fields":{"1":"タイトル","2":"本文"}}}}'
 ```
 
+### template_validate（テンプレート構文の検証）
+
+```bash
+curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <your-token>' \
+  -d '{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"template_validate","arguments":{"blog_id":1,"body":"<mt:Entries lastn=\"5\"><$mt:EntryTitle$>"}}}'
+```
+
+閉じタグが無いのでエラーが返る例:
+```json
+{"valid":false,"errors":[{"message":"<mt:Entries> with no </mt:Entries> on line 1.","line":1}]}
+```
+
+### template_tag_list（使えるタグを調べる）
+
+```bash
+curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <your-token>' \
+  -d '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"template_tag_list","arguments":{"keyword":"EntryTitle"}}}'
+```
+
+### rebuild_template（テンプレート1枚の再構築）
+
+```bash
+curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <your-token>' \
+  -d '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"rebuild_template","arguments":{"template_id":1}}}'
+```
+
 ## ディレクトリ構成
 
 ```
@@ -398,7 +486,8 @@ plugins/MTMCP/
             ├── Entry.pm        # entry_list / get / create / update / delete
             ├── Category.pm     # category_list / tag_list
             ├── Asset.pm        # asset_list / get / upload / delete / thumbnail
-            ├── Template.pm     # template_list / get / create / update / delete
+            ├── Template.pm     # template_list / get / create / update / delete / validate / preview / tag_list
+            ├── Rebuild.pm      # rebuild_template / entry / content_data / site
             ├── ContentType.pm  # content_type_list / get / create
             └── ContentData.pm  # content_data_list / get / create / update / delete
 
@@ -435,3 +524,10 @@ tools/
 | `invalid_grant`: `Refresh token is invalid or expired` | `refresh_token` が期限切れ（30日）・使用済み（ローテーション済み）・不正な値 | 認可フロー（またはログインAPI）を最初からやり直して新しいトークンを取得する |
 | アップロードで `File extension not allowed` | 許可されていない拡張子（実行可能ファイルや`.svg`など）を指定した | 許可拡張子（README「asset_uploadの注意点」参照）に変換してからアップロード |
 | Claude Desktopで「有効なMCPサーバー設定ではないため、スキップされました」 | `claude_desktop_config.json` は `type`/`url`/`headers` によるリモートサーバー定義をサポートしていない | アプリのコネクタ設定UIから追加するか、HTTPS未対応のローカル環境なら `tools/claude-desktop-bridge/` のブリッジスクリプトを使う |
+| `テンプレート構文にエラーがあります`（テンプレート保存時） | 本文に閉じ忘れや存在しないタグがある | エラーの行番号を見て修正する。`template_tag_list` で正しいタグ名を確認できる。意図的に保存する場合のみ `skip_validation: true` |
+| `「テンプレートの編集」の権限がありません` | トークンのユーザーに `edit_templates` 権限が無い | MT 側でテンプレート編集権限を持つロールを付与するか、権限のあるユーザーでトークンを再発行 |
+| `「サイトの再構築」の権限がありません` | トークンのユーザーに `rebuild` 権限が無い | MT 側で「サイトの再構築」権限を付与するか、権限のあるユーザーでトークンを再発行 |
+| `rebuild_site` が応答しない・504 になる | 記事数が多くWebサーバーのタイムアウトを超えた | `rebuild_template` / `rebuild_entry` で範囲を絞る、`archive_type` を指定して分割実行する、またはMT管理画面から再構築する |
+| `このテンプレート（type: ...）は単体で再構築できません` | ウィジェットやモジュールなど、単体では出力先を持たないテンプレートを指定した | それを読み込んでいるインデックス/アーカイブテンプレートを `rebuild_template` するか、`rebuild_site` を使う |
+| `ブログの公開パス（site_path）が設定されていないため再構築できません` | ブログの公開パスが未設定 | MT 管理画面の「サイトの設定 > 公開」でサイトパスを設定する |
+| `Archive type '...' is not a chosen archive type` | `rebuild_site` の `archive_type` がそのブログで使われていない | 指定を外して全体を再構築するか、ブログで有効なアーカイブタイプを指定する |
