@@ -12,6 +12,7 @@ use constant RELEASE => 2;
 our %STORE;
 our $NEXT_ID = 1;
 our @SAVED;
+our $LAST_SAVE;
 our @REMOVED;
 our $LAST_LOAD_TERMS;
 our $LAST_LOAD_ARGS;
@@ -20,6 +21,7 @@ sub reset {
     %STORE           = ();
     $NEXT_ID         = 1;
     @SAVED           = ();
+    $LAST_SAVE       = undef;
     @REMOVED         = ();
     $LAST_LOAD_TERMS = undef;
     $LAST_LOAD_ARGS  = undef;
@@ -36,10 +38,11 @@ sub new {
         excerpt     => undef,
         status      => HOLD(),
         author_id   => undef,
-        authored_on => undef,
-        modified_on => undef,
-        basename    => undef,
-        class       => 'entry',
+        authored_on    => undef,
+        modified_on    => undef,
+        basename       => undef,
+        convert_breaks => undef,
+        class          => 'entry',
     }, $class;
 }
 
@@ -123,8 +126,24 @@ sub save {
     $self->{id} = $NEXT_ID++ unless defined $self->{id};
     $self->{class} = 'entry' unless defined $self->{class};
     $STORE{ $self->{id} } = $self;
+    $LAST_SAVE = $self;
     push @SAVED, $self;
     return 1;
+}
+
+sub clone {
+    my $self = shift;
+    my $copy = bless { %$self }, ref($self);
+    return $copy;
+}
+
+sub cache_property {
+    my ( $self, $key, $code, $val ) = @_;
+    if ( @_ >= 4 ) {
+        $self->{"_cache_$key"} = $val;
+        return $val;
+    }
+    return $self->{"_cache_$key"};
 }
 
 sub remove {
@@ -138,7 +157,7 @@ sub errstr    { 'stub error' }
 sub permalink { '' }
 
 for my $field (
-    qw(id blog_id title text text_more excerpt status author_id authored_on modified_on basename class)
+    qw(id blog_id title text text_more excerpt status author_id authored_on modified_on basename convert_breaks class)
     )
 {
     no strict 'refs';

@@ -15,6 +15,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `entry_create` | 記事作成（デフォルト: 下書き） |
 | `entry_update` | 記事更新 |
 | `entry_delete` | 記事削除 |
+| `entry_preview` | 記事を Individual アーカイブとしてビルド（ファイルは書き出さない。`entry_create` 前の見た目確認） |
 | `page_list` | 固定ページ一覧（`folder_id` で絞り込み可） |
 | `page_get` | 固定ページ1件取得（本文含む） |
 | `page_create` | 固定ページ作成（デフォルト: 下書き。フォルダは `folder_id` 単数） |
@@ -68,7 +69,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `rebuild_content_data` | コンテンツデータ1件を再構築 |
 | `rebuild_site` | ブログ全体を再構築（`archive_type` で範囲を絞り込み可） |
 
-> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` / `templatemap_*` の書き込み / `widgetset_*` の書き込みは **「テンプレートの編集」権限**（`edit_templates`）を必要とします。`page_*` は **「ページの管理」権限**（`manage_pages`）を必要とします。`folder_create` / `folder_update` は `save_folder`、`folder_delete` は `delete_folder`（いずれも `manage_pages` に含まれます）。
+> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` / `templatemap_*` の書き込み / `widgetset_*` の書き込みは **「テンプレートの編集」権限**（`edit_templates`）を必要とします。`page_*` は **「ページの管理」権限**（`manage_pages`）を必要とします。`folder_create` / `folder_update` は `save_folder`、`folder_delete` は `delete_folder`（いずれも `manage_pages` に含まれます）。`entry_preview` は **「記事の作成」権限**（`create_post`）を必要とします。
 >
 > `template_preview` は任意の本文を MT テンプレートとして評価するため、保存と同等の権限を要求しています。`AllowFileInclude` を有効にしている環境では `<mt:Include file="...">` でサーバー上のファイルを読み出せてしまうためです。構文チェックのみで評価を伴わない `template_validate` はブログへのアクセス権限で実行できます。
 
@@ -95,6 +96,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 ```
 ユーザー: 「テスト記事を追加して」
 AI:       blog_list → blog_id を確認
+          → entry_preview(blog_id, title="テスト記事", body=...) で見た目確認（公開ファイルは書かない）
           → entry_create(blog_id, title="テスト記事", status="draft")
 
 ユーザー: 「会社概要ページを作って About フォルダに入れて公開して」
@@ -519,7 +521,7 @@ plugins/MTMCP/
         │   └── Authorize.pm  # OAuth 認可エンドポイント（consent画面）
         └── Tools/
             ├── Blog.pm         # blog_list
-            ├── Entry.pm        # entry_list / get / create / update / delete
+            ├── Entry.pm        # entry_list / get / create / update / delete / preview
             ├── Page.pm         # page_list / get / create / update / delete / preview
             ├── Folder.pm       # folder_list / get / create / update / delete
             ├── Category.pm     # category_list / tag_list

@@ -15,6 +15,7 @@ my %TOOL_HANDLERS = (
     'entry_create'    => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::create(@_)      },
     'entry_update'    => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::update(@_)      },
     'entry_delete'    => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::remove(@_)      },
+    'entry_preview'   => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::preview(@_)     },
     'page_list'       => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::list(@_)         },
     'page_get'        => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::get(@_)          },
     'page_create'     => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::create(@_)       },
@@ -190,6 +191,25 @@ sub _tool_definitions {
                 required => ['entry_id'],
                 properties => {
                     entry_id => { type => 'integer', description => '削除する記事のID' },
+                },
+            },
+        },
+        {
+            name        => 'entry_preview',
+            description => '記事を Individual アーカイブテンプレートでビルドして HTML を返す（公開ファイルは書かない）。entry_create の前に見た目を確認するために使う。entry_id か title/body が必要。Page ID は指定できない（Entry not found）。preferred な Individual マップが必要。権限は記事の作成（create_post）。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id'],
+                properties => {
+                    blog_id        => { type => 'integer', description => 'ブログID（blog_list で確認）' },
+                    entry_id       => { type => 'integer', description => '既存記事のID（Page ID は不可。指定フィールドがあれば未保存上書き）' },
+                    title          => { type => 'string',  description => '未保存プレビュー時のタイトル、または既存記事への上書き' },
+                    body           => { type => 'string',  description => '未保存プレビュー時の本文、または既存記事への上書き' },
+                    more           => { type => 'string',  description => '続き（text_more）' },
+                    excerpt        => { type => 'string',  description => '概要' },
+                    category_ids   => { type => 'array', items => { type => 'integer' }, description => 'カテゴリIDの配列（先頭が主カテゴリ。保存しない）' },
+                    convert_breaks => { type => 'string',  description => '改行変換。省略時は既存記事の値、未保存ならブログ設定' },
+                    status         => { type => 'string',  enum => ['publish','draft'], description => '見た目用のみ。公開ファイルは出さない' },
                 },
             },
         },

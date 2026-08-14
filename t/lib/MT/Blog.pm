@@ -17,6 +17,7 @@ sub new {
         name          => 'Test Blog',
         site_path     => '/tmp/mt-site',
         archive_type  => '',
+        convert_paras => '__default__',
     }, $class;
 }
 
@@ -40,7 +41,7 @@ sub publisher {
     return MT::Blog::_Publisher->new;
 }
 
-for my $field (qw(id name site_path archive_type)) {
+for my $field (qw(id name site_path archive_type convert_paras)) {
     no strict 'refs';
     *$field = sub {
         my $self = shift;
