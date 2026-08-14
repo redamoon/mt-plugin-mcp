@@ -27,6 +27,11 @@ my %TOOL_HANDLERS = (
     'category_update'    => sub { require MTMCP::Tools::Category; MTMCP::Tools::Category::update(@_)    },
     'category_delete'    => sub { require MTMCP::Tools::Category; MTMCP::Tools::Category::remove(@_)    },
     'category_permutate' => sub { require MTMCP::Tools::Category; MTMCP::Tools::Category::permutate(@_) },
+    'category_set_list'   => sub { require MTMCP::Tools::CategorySet; MTMCP::Tools::CategorySet::list(@_)   },
+    'category_set_get'    => sub { require MTMCP::Tools::CategorySet; MTMCP::Tools::CategorySet::get(@_)    },
+    'category_set_create' => sub { require MTMCP::Tools::CategorySet; MTMCP::Tools::CategorySet::create(@_) },
+    'category_set_update' => sub { require MTMCP::Tools::CategorySet; MTMCP::Tools::CategorySet::update(@_) },
+    'category_set_delete' => sub { require MTMCP::Tools::CategorySet; MTMCP::Tools::CategorySet::remove(@_) },
     'tag_list'        => sub { require MTMCP::Tools::Tag;      MTMCP::Tools::Tag::list(@_)         },
     'tag_rename'      => sub { require MTMCP::Tools::Tag;      MTMCP::Tools::Tag::rename(@_)       },
     'tag_delete'      => sub { require MTMCP::Tools::Tag;      MTMCP::Tools::Tag::remove(@_)       },
@@ -286,19 +291,20 @@ sub _tool_definitions {
         },
         {
             name        => 'category_list',
-            description => '指定ブログの記事カテゴリ一覧を取得する。フォルダ（folder_list）やカテゴリセットは含まない。entry_create の category_ids や category_permutate の前に呼ぶこと。',
+            description => '指定ブログのカテゴリ一覧を取得する。category_set_id を省略（または 0）すると記事カテゴリのみ。セット内カテゴリを取るときは category_set_id を渡す。フォルダ（folder_list）は含まない。記事の category_ids にはセット内カテゴリを渡さないこと。category_permutate の前に全 ID を取るために使う。',
             inputSchema => {
                 type     => 'object',
                 required => ['blog_id'],
                 properties => {
-                    blog_id   => { type => 'integer', description => 'ブログID' },
-                    parent_id => { type => 'integer', description => '親カテゴリID。0 でトップレベルのみ。省略時は全件' },
+                    blog_id         => { type => 'integer', description => 'ブログID' },
+                    parent_id       => { type => 'integer', description => '親カテゴリID。0 でトップレベルのみ。省略時は全件' },
+                    category_set_id => { type => 'integer', description => 'カテゴリセットID。省略時は記事カテゴリ（0）' },
                 },
             },
         },
         {
             name        => 'category_get',
-            description => '記事カテゴリを1件取得する。フォルダIDやカテゴリセットのカテゴリは見つからない。',
+            description => 'カテゴリを1件取得する。フォルダIDは見つからない。セット内カテゴリも取得できる（返却の category_set_id で判別）。記事の category_ids にはセット内カテゴリを渡さないこと。',
             inputSchema => {
                 type     => 'object',
                 required => ['category_id'],
@@ -309,22 +315,23 @@ sub _tool_definitions {
         },
         {
             name        => 'category_create',
-            description => '記事カテゴリを作成する。フォルダやカテゴリセットの作成ではない。親は同じブログの記事カテゴリに限る。権限はカテゴリの管理（save_category）。公開ファイルは自動再構築しない（必要なら rebuild_site の archive_type Category）。',
+            description => 'カテゴリを作成する。category_set_id を省略すると記事カテゴリ（権限 save_category）。セット内なら同じブログのセットを指定し、権限は save_catefory_set_category（MT コアの綴り）。親は同じブログ・同じセット・class=category。記事の category_ids にはセット内カテゴリを渡さない。公開ファイルは自動再構築しない（必要なら rebuild_site の archive_type Category）。',
             inputSchema => {
                 type     => 'object',
                 required => ['blog_id', 'label'],
                 properties => {
-                    blog_id     => { type => 'integer', description => 'ブログID' },
-                    label       => { type => 'string',  description => 'カテゴリ名（100文字以内。同じ親配下で一意）' },
-                    basename    => { type => 'string',  description => 'URL パス用 basename（省略時は自動生成）' },
-                    parent_id   => { type => 'integer', description => '親カテゴリID（省略時はトップレベル）' },
-                    description => { type => 'string',  description => '説明' },
+                    blog_id         => { type => 'integer', description => 'ブログID' },
+                    label           => { type => 'string',  description => 'カテゴリ名（100文字以内。同じ親・同じセット内で一意）' },
+                    basename        => { type => 'string',  description => 'URL パス用 basename（省略時は自動生成）' },
+                    parent_id       => { type => 'integer', description => '親カテゴリID（省略時はトップレベル）' },
+                    description     => { type => 'string',  description => '説明' },
+                    category_set_id => { type => 'integer', description => 'カテゴリセットID。省略時は記事カテゴリ（0）' },
                 },
             },
         },
         {
             name        => 'category_update',
-            description => '記事カテゴリを更新する。指定したフィールドのみ上書き（最低1つ必要）。フォルダIDやカテゴリセットのカテゴリは更新できない。権限はカテゴリの管理（save_category）。',
+            description => 'カテゴリを更新する。指定したフィールドのみ上書き（最低1つ必要）。フォルダIDは更新できない。セット内カテゴリはオブジェクトの category_set_id で権限が切り替わる（save_category / save_catefory_set_category）。',
             inputSchema => {
                 type     => 'object',
                 required => ['category_id'],
@@ -332,14 +339,14 @@ sub _tool_definitions {
                     category_id => { type => 'integer', description => 'カテゴリID' },
                     label       => { type => 'string',  description => '新しいカテゴリ名（100文字以内）' },
                     basename    => { type => 'string',  description => '新しい basename' },
-                    parent_id   => { type => 'integer', description => '新しい親カテゴリID。0 でトップレベル' },
+                    parent_id   => { type => 'integer', description => '新しい親カテゴリID。0 でトップレベル。同じセット内に限る' },
                     description => { type => 'string',  description => '新しい説明' },
                 },
             },
         },
         {
             name        => 'category_delete',
-            description => '記事カテゴリを削除する。取り消せない操作なので、実行前に対象を確認すること。子カテゴリは親へ繰り上がる。権限はカテゴリの管理（delete_category）。公開ファイルは自動再構築しない（必要なら rebuild_site の archive_type Category）。',
+            description => 'カテゴリを削除する。取り消せない操作なので、実行前に対象を確認すること。子カテゴリは親へ繰り上がる。記事カテゴリは delete_category、セット内は manage_category_set。公開ファイルは自動再構築しない（必要なら rebuild_site の archive_type Category）。',
             inputSchema => {
                 type     => 'object',
                 required => ['category_id'],
@@ -350,16 +357,75 @@ sub _tool_definitions {
         },
         {
             name        => 'category_permutate',
-            description => '指定ブログの記事カテゴリ表示順を並べ替える。category_ids は先に category_list で取った当該ブログの記事カテゴリ全 ID と完全一致させること。権限はカテゴリの管理（edit_categories）。',
+            description => 'カテゴリ表示順を並べ替える。category_ids は先に category_list で取った当該スコープ（記事または指定セット）の全 ID と完全一致させること。省略時は Blog.category_order（edit_categories）。category_set_id 指定時は CategorySet.order（manage_category_set）。',
             inputSchema => {
                 type     => 'object',
                 required => ['blog_id', 'category_ids'],
                 properties => {
-                    blog_id      => { type => 'integer', description => 'ブログID' },
-                    category_ids => { type => 'array', items => { type => 'integer' }, description => '並べ替え後のカテゴリID（全件・重複なし）' },
+                    blog_id         => { type => 'integer', description => 'ブログID' },
+                    category_ids    => { type => 'array', items => { type => 'integer' }, description => '並べ替え後のカテゴリID（全件・重複なし）' },
+                    category_set_id => { type => 'integer', description => 'カテゴリセットID。省略時は記事カテゴリ' },
                 },
             },
         },
+        {
+            name        => 'category_set_list',
+            description => '指定ブログのカテゴリセット一覧を取得する。コンテンツタイプの categories フィールドが参照するセット。権限はカテゴリセットの管理（manage_category_set）。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id'],
+                properties => {
+                    blog_id => { type => 'integer', description => 'ブログID' },
+                },
+            },
+        },
+        {
+            name        => 'category_set_get',
+            description => 'カテゴリセットを1件取得する。配下カテゴリ（id, label, parent_id, basename）を含む。権限は manage_category_set。',
+            inputSchema => {
+                type     => 'object',
+                required => ['category_set_id'],
+                properties => {
+                    category_set_id => { type => 'integer', description => 'カテゴリセットID' },
+                },
+            },
+        },
+        {
+            name        => 'category_set_create',
+            description => 'カテゴリセットを作成する。サイト内で名前は一意。セット内カテゴリは category_create に category_set_id を渡して追加する。権限は manage_category_set。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id', 'name'],
+                properties => {
+                    blog_id => { type => 'integer', description => 'ブログID' },
+                    name    => { type => 'string',  description => 'セット名（サイト内で一意）' },
+                },
+            },
+        },
+        {
+            name        => 'category_set_update',
+            description => 'カテゴリセットの名前だけを更新する（Data API と同じ）。categories 配列は渡さない（渡すとエラー）。セット内カテゴリは category_update を使う。権限は manage_category_set。',
+            inputSchema => {
+                type     => 'object',
+                required => ['category_set_id', 'name'],
+                properties => {
+                    category_set_id => { type => 'integer', description => 'カテゴリセットID' },
+                    name            => { type => 'string',  description => '新しいセット名' },
+                },
+            },
+        },
+        {
+            name        => 'category_set_delete',
+            description => 'カテゴリセットを削除する。取り消せない。配下カテゴリも削除される。コンテンツタイプの categories フィールドがこのセットを参照していてもコアはブロックしないため、削除前に content_type_get で参照の有無を確認すること。権限は manage_category_set。',
+            inputSchema => {
+                type     => 'object',
+                required => ['category_set_id'],
+                properties => {
+                    category_set_id => { type => 'integer', description => '削除するカテゴリセットのID' },
+                },
+            },
+        },
+
         {
             name        => 'tag_list',
             description => '指定ブログで使われているタグ一覧を取得する。記事・ページ・アセット・コンテンツデータの ObjectTag を対象にする。正規化専用レコードは除く。',
@@ -851,7 +917,7 @@ sub _tool_definitions {
         },
         {
             name        => 'content_type_create',
-            description => 'コンテンツタイプを新規作成する。fields を省略すると「タイトル」「本文」の2フィールドが作られる。',
+            description => 'コンテンツタイプを新規作成する。fields を省略すると「タイトル」「本文」の2フィールドが作られる。type が categories のフィールドには category_set_id（または related_cat_set_id）が必須。',
             inputSchema => {
                 type     => 'object',
                 required => ['blog_id', 'name'],
@@ -868,7 +934,8 @@ sub _tool_definitions {
                                 label       => { type => 'string',  description => 'フィールドラベル' },
                                 order       => { type => 'integer', description => '表示順' },
                                 label_field => { type => 'boolean', description => 'データラベルに使うフィールド' },
-                                required    => { type => 'boolean', description => '必須かどうか' },
+                                required        => { type => 'boolean', description => '必須かどうか' },
+                                category_set_id => { type => 'integer', description => 'type=categories のとき必須。category_set_create で作ったセットID' },
                             },
                         },
                     },

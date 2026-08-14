@@ -124,8 +124,9 @@ sub _seed_folder_in_category_store {
     _reset();
     _seed_category(id => 9, label => 'From set', category_set_id => 2);
     my $got = eval { MTMCP::Tools::Category::get($app, { category_id => 9 }) };
-    ok(!$got, 'セットカテゴリの get は失敗');
-    like($@, qr/記事カテゴリではありません/, 'セットは記事カテゴリではない');
+    ok($got, 'セットカテゴリの get は成功する') or diag($@);
+    is($got->{category_set_id}, 2, 'get はセット ID を返す');
+    is($got->{label}, 'From set', 'セット内カテゴリの label');
 }
 
 # ------------------------------------------------------------------
@@ -194,8 +195,8 @@ sub _seed_folder_in_category_store {
             category_set_id => 4,
         });
     };
-    ok(!$got, 'category_set_id != 0 は拒否');
-    like($@, qr/カテゴリセット/, 'セット ID 拒否メッセージ');
+    ok(!$got, '存在しないセット ID は拒否');
+    like($@, qr/CategorySet not found: 4/, '未作成のセットは not found');
 }
 
 # ------------------------------------------------------------------
