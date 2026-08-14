@@ -14,6 +14,28 @@ use MTMCP::Perm;
 use constant KEYWORD_SCAN_LIMIT => 2000;
 use constant PREVIEW_MAX_CHARS  => 100_000;
 
+
+# Data API と同様、DeleteFilesAtRebuild のときだけ公開アーカイブを消す。
+# page_delete と entry_delete で方針を揃える（片方だけ変えないこと）。
+sub _maybe_remove_entry_archive_file {
+    my ($app, $obj, $archive_type) = @_;
+    return unless $app && $obj && defined $archive_type && $archive_type ne '';
+    my $cfg = ($app->can('config') ? eval { $app->config } : undef);
+    return unless $cfg && eval { $cfg->DeleteFilesAtRebuild };
+
+    my $pub = ($app->can('publisher') ? eval { $app->publisher } : undef);
+    if (!$pub) {
+        require MT::Blog;
+        my $blog = eval { MT::Blog->load($obj->blog_id) };
+        $pub = ($blog && $blog->can('publisher')) ? eval { $blog->publisher } : undef;
+    }
+    return unless $pub && $pub->can('remove_entry_archive_file');
+    $pub->remove_entry_archive_file(
+        Entry       => $obj,
+        ArchiveType => $archive_type,
+    );
+}
+
 sub _load_page {
     my ($page_id) = @_;
     return MT::Page->load({ id => $page_id, class => 'page' });
@@ -157,6 +179,7 @@ sub remove {
     my $page = _load_page($page_id) or die "Page not found: $page_id\n";
     _require_manage_pages($app, $page->blog_id);
     my $title = $page->title;
+    _maybe_remove_entry_archive_file($app, $page, 'Page');
     $page->remove or die $page->errstr . "\n";
     return { page_id => $page_id, status => 'deleted', title => $title };
 }

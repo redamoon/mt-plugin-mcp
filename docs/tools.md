@@ -14,13 +14,13 @@ Movable Type 9 用 MCP サーバーが公開するツールの一覧と、権限
 | `entry_get` | 記事1件取得（本文含む） |
 | `entry_create` | 記事作成（デフォルト: 下書き） |
 | `entry_update` | 記事更新 |
-| `entry_delete` | 記事削除 |
+| `entry_delete` | 記事削除（`DeleteFilesAtRebuild` が無効なら公開 HTML が残ることがある） |
 | `entry_preview` | 記事を Individual アーカイブとしてビルド（ファイルは書き出さない。`entry_create` 前の見た目確認） |
 | `page_list` | 固定ページ一覧（`folder_id` で絞り込み可） |
 | `page_get` | 固定ページ1件取得（本文含む） |
 | `page_create` | 固定ページ作成（デフォルト: 下書き。フォルダは `folder_id` 単数） |
 | `page_update` | 固定ページ更新（`folder_id: 0` でフォルダ解除） |
-| `page_delete` | 固定ページ削除 |
+| `page_delete` | 固定ページ削除（`DeleteFilesAtRebuild` が無効なら公開 HTML が残ることがある） |
 | `page_preview` | 固定ページを Page アーカイブとしてビルド（ファイルは書き出さない） |
 | `category_list` | カテゴリ一覧（`category_set_id` 省略時は記事カテゴリ。指定時はセット内） |
 | `category_get` | カテゴリ1件取得（セット内も含む。フォルダは見つからない） |
