@@ -45,6 +45,8 @@ sub create {
     my $type    = $args->{type}    or die "type is required\n";
     MTMCP::Perm::require_blog_permission($app, $blog_id, 'edit_templates', 'テンプレートの編集');
 
+    _assert_widgetset_body($type, $args);
+
     my $body = $args->{body} // '';
     _assert_valid($blog_id, $body, $type, $args->{skip_validation});
     _assert_outfile($type, $args->{outfile}, $args->{build_type});
@@ -107,6 +109,8 @@ sub update {
     my @updatable = qw(body name type outfile identifier build_type rebuild_me);
     die "更新する項目がありません（" . join(', ', @updatable) . " のいずれかを指定してください）\n"
         unless grep { defined $args->{$_} } @updatable;
+
+    _assert_widgetset_body($args->{type} // $tmpl->type, $args);
 
     if (defined $args->{body}) {
         _assert_valid($tmpl->blog_id, $args->{body}, $args->{type} // $tmpl->type, $args->{skip_validation});
@@ -327,6 +331,18 @@ sub _assert_valid {
     } @$errors;
     die "テンプレート構文にエラーがあります。修正してから再度保存してください"
         . "（意図的に保存する場合は skip_validation: true を指定）:\n$detail\n";
+}
+
+# widgetset の text は MT::Template::save が save_widgetset へ分岐し、
+# modulesets（ウィジェットテンプレートIDのカンマ区切り）から再生成して上書きする。
+# MCP が渡した body は保存されないため、指定されていれば明示的にエラーにする。
+# （黙って成功を返すと AI クライアントが「更新できた」と誤認する）
+sub _assert_widgetset_body {
+    my ($type, $args) = @_;
+    return unless ($type // '') eq 'widgetset';
+    return unless defined $args->{body};
+    die "type が widgetset のときは body を指定できません。"
+        . "ウィジェットセットの本文は modulesets（ウィジェットテンプレートIDのカンマ区切り）から自動生成されるため、指定した body は保存されません\n";
 }
 
 # 公開されるインデックステンプレートには出力ファイル名が必須。
