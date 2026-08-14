@@ -44,10 +44,17 @@ sub list {
     return [ map { _to_hash($_) } @entries ];
 }
 
+# mt_entry は Entry と Page で共有される。スカラー load / { id => $id } は
+# class フィルタを通さないため、Page ID でもオブジェクトが返る。
+sub _load_entry {
+    my ($entry_id) = @_;
+    return MT::Entry->load({ id => $entry_id, class => 'entry' });
+}
+
 sub remove {
     my ($app, $args) = @_;
     my $entry_id = $args->{entry_id} or die "entry_id is required\n";
-    my $entry = MT::Entry->load($entry_id) or die "Entry not found: $entry_id\n";
+    my $entry = _load_entry($entry_id) or die "Entry not found: $entry_id\n";
     MTMCP::Perm::require_blog_access($app, $entry->blog_id);
     my $title = $entry->title;
     $entry->remove or die $entry->errstr . "\n";
@@ -57,7 +64,7 @@ sub remove {
 sub get {
     my ($app, $args) = @_;
     my $entry_id = $args->{entry_id} or die "entry_id is required\n";
-    my $entry = MT::Entry->load($entry_id) or die "Entry not found: $entry_id\n";
+    my $entry = _load_entry($entry_id) or die "Entry not found: $entry_id\n";
     MTMCP::Perm::require_blog_access($app, $entry->blog_id);
     return _to_hash($entry, 1);
 }
@@ -86,7 +93,7 @@ sub create {
 sub update {
     my ($app, $args) = @_;
     my $entry_id = $args->{entry_id} or die "entry_id is required\n";
-    my $entry = MT::Entry->load($entry_id) or die "Entry not found: $entry_id\n";
+    my $entry = _load_entry($entry_id) or die "Entry not found: $entry_id\n";
     MTMCP::Perm::require_blog_access($app, $entry->blog_id);
     $entry->title($args->{title}) if defined $args->{title};
     $entry->text($args->{body})   if defined $args->{body};

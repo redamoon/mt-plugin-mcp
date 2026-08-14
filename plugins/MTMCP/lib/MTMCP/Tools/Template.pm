@@ -191,7 +191,9 @@ sub preview {
     # タグを含むことが多いため、entry_id が渡されていればスタッシュしておく。
     if (my $entry_id = $args->{entry_id}) {
         require MT::Entry;
-        my $entry = MT::Entry->load($entry_id) or die "Entry not found: $entry_id\n";
+        # スカラー load は Page も返すため、class => 'entry' で記事に限定する。
+        my $entry = MT::Entry->load({ id => $entry_id, class => 'entry' })
+            or die "Entry not found: $entry_id\n";
         die "entry_id (blog_id: " . $entry->blog_id . ") と blog_id ($blog_id) が一致しません\n"
             unless $entry->blog_id == $blog_id;
         $ctx->stash('entry', $entry);
