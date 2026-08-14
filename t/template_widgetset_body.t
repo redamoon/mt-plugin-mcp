@@ -1,5 +1,6 @@
 use strict;
 use warnings;
+use utf8;
 use Test::More;
 use FindBin;
 use lib "$FindBin::Bin/lib";
