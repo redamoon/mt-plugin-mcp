@@ -17,6 +17,11 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `entry_delete` | 記事削除 |
 | `category_list` | カテゴリ一覧取得 |
 | `tag_list` | タグ一覧取得 |
+| `folder_list` | フォルダ一覧取得（固定ページ用。記事カテゴリとは別） |
+| `folder_get` | フォルダ1件取得 |
+| `folder_create` | フォルダ作成 |
+| `folder_update` | フォルダ更新 |
+| `folder_delete` | フォルダ削除（配下ページは親またはルートへ移る） |
 
 ### アセット・テンプレート
 
@@ -45,7 +50,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `rebuild_content_data` | コンテンツデータ1件を再構築 |
 | `rebuild_site` | ブログ全体を再構築（`archive_type` で範囲を絞り込み可） |
 
-> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` は **「テンプレートの編集」権限**（`edit_templates`）を必要とします（v0.6.0 で追加。`create` / `update` / `delete` は従来ブログへのアクセス権限だけで実行できました）。
+> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` は **「テンプレートの編集」権限**（`edit_templates`）を必要とします（v0.6.0 で追加。`create` / `update` / `delete` は従来ブログへのアクセス権限だけで実行できました）。`folder_create` / `folder_update` は `save_folder`、`folder_delete` は `delete_folder`（いずれも `manage_pages` に含まれます）。
 >
 > `template_preview` は任意の本文を MT テンプレートとして評価するため、保存と同等の権限を要求しています。`AllowFileInclude` を有効にしている環境では `<mt:Include file="...">` でサーバー上のファイルを読み出せてしまうためです。構文チェックのみで評価を伴わない `template_validate` はブログへのアクセス権限で実行できます。
 
@@ -62,7 +67,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `content_data_update` | コンテンツデータ更新（部分更新対応） |
 | `content_data_delete` | コンテンツデータ削除 |
 
-> 削除系ツール（`entry_delete` / `asset_delete` / `template_delete` / `content_data_delete`）は取り消せない操作です。AI が実行する前に対象を一覧・取得系ツールで確認するよう促してください。
+> 削除系ツール（`entry_delete` / `folder_delete` / `asset_delete` / `template_delete` / `content_data_delete`）は取り消せない操作です。AI が実行する前に対象を一覧・取得系ツールで確認するよう促してください。
 
 ### AI の操作フロー
 
@@ -487,6 +492,7 @@ plugins/MTMCP/
         └── Tools/
             ├── Blog.pm         # blog_list
             ├── Entry.pm        # entry_list / get / create / update / delete
+            ├── Folder.pm       # folder_list / get / create / update / delete
             ├── Category.pm     # category_list / tag_list
             ├── Asset.pm        # asset_list / get / upload / delete / thumbnail
             ├── Template.pm     # template_list / get / create / update / delete / validate / preview / tag_list
