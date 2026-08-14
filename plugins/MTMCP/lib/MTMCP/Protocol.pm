@@ -16,6 +16,7 @@ my %TOOL_HANDLERS = (
     'entry_update'    => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::update(@_)      },
     'entry_delete'    => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::remove(@_)      },
     'entry_preview'   => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::preview(@_)     },
+    'entry_export'    => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::export(@_)      },
     'page_list'       => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::list(@_)         },
     'page_get'        => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::get(@_)          },
     'page_create'     => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::create(@_)       },
@@ -231,6 +232,19 @@ sub _tool_definitions {
                     category_ids   => { type => 'array', items => { type => 'integer' }, description => 'カテゴリIDの配列（先頭が主カテゴリ。保存しない）' },
                     convert_breaks => { type => 'string',  description => '改行変換。省略時は既存記事の値、未保存ならブログ設定' },
                     status         => { type => 'string',  enum => ['publish','draft'], description => '見た目用のみ。公開ファイルは出さない' },
+                },
+            },
+        },
+        {
+            name        => 'entry_export',
+            description => '記事1件を Movable Type の Import/Export テキストで返す。全件はコンテキスト溢れしやすいので entry_id 必須。Page は拒否。'
+                . '本文は文字数上限で打ち切る。サイトバックアップや移行用一括投入の代替ではない。権限はブログのエクスポート（export_blog）。',
+            inputSchema => {
+                type     => 'object',
+                required => ['entry_id'],
+                properties => {
+                    entry_id => { type => 'integer', description => '記事ID（Page ID は不可。entry_list で確認）' },
+                    blog_id  => { type => 'integer', description => 'ブログID。指定時は記事の blog_id と一致必須' },
                 },
             },
         },
