@@ -136,10 +136,16 @@ sub validate {
 
 # テンプレートを実際にビルドして出力HTMLを返す（ファイルは書き出さない）。
 # 構文が通っていても意図した内容が出るとは限らないため、AI が結果を確認する用。
+#
+# 任意の本文を受け取って MT テンプレートとして評価するため、テンプレートを
+# 保存するのと同等の権限を要求する。特に AllowFileInclude が有効な環境では
+# <mt:Include file="..."> でサーバー上のファイルを読み出せてしまうため、
+# ブログへのアクセス権限だけでは不十分。
+# （構文チェックのみの validate は評価を伴わないのでアクセス権限で足りる）
 sub preview {
     my ($app, $args) = @_;
     my $blog_id = $args->{blog_id} or die "blog_id is required\n";
-    MTMCP::Perm::require_blog_access($app, $blog_id);
+    MTMCP::Perm::require_blog_permission($app, $blog_id, 'edit_templates', 'テンプレートの編集');
 
     my ($body, $type);
     if (defined $args->{body}) {
