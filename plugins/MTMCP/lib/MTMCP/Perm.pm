@@ -85,4 +85,14 @@ sub require_log_view {
     return \@blog_ids;
 }
 
+# ユーザー管理（システム権限）。ブログ単位の require_blog_access は使わない。
+# can_manage_users_groups は is_superuser を含む（MT::Author）。
+sub require_manage_users {
+    my ($app) = @_;
+    my $user = eval { $app->user };
+    die "認証されていないため、この操作を行えません\n" unless $user;
+    return if $user->can_manage_users_groups;
+    die "ユーザーを管理する権限がありません\n";
+}
+
 1;

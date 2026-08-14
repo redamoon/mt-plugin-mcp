@@ -54,6 +54,12 @@ my %TOOL_HANDLERS = (
     'widget_list'          => sub { require MTMCP::Tools::Widget;       MTMCP::Tools::Widget::list_widgets(@_)   },
     'log_list'             => sub { require MTMCP::Tools::Log;          MTMCP::Tools::Log::list(@_)              },
     'log_get'              => sub { require MTMCP::Tools::Log;          MTMCP::Tools::Log::get(@_)               },
+    'user_list'            => sub { require MTMCP::Tools::User;         MTMCP::Tools::User::list(@_)              },
+    'user_get'             => sub { require MTMCP::Tools::User;         MTMCP::Tools::User::get(@_)               },
+    'user_create'          => sub { require MTMCP::Tools::User;         MTMCP::Tools::User::create(@_)            },
+    'user_delete'          => sub { require MTMCP::Tools::User;         MTMCP::Tools::User::remove(@_)            },
+    'user_unlock'          => sub { require MTMCP::Tools::User;         MTMCP::Tools::User::unlock(@_)            },
+    'user_recover_password'=> sub { require MTMCP::Tools::User;         MTMCP::Tools::User::recover_password(@_)  },
     'rebuild_site'         => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::site(@_)          },
     'rebuild_template'     => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::template(@_)      },
     'rebuild_entry'        => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::entry(@_)         },
@@ -949,6 +955,100 @@ sub _tool_definitions {
                 required => ['log_id'],
                 properties => {
                     log_id => { type => 'integer', description => 'ログID（log_list で確認）' },
+                },
+            },
+        },
+        {
+            name        => 'user_list',
+            description => 'MT のユーザー（MT::Author）一覧を名前順で取得する。コメント投稿者は含まない。'
+                . '権限はシステムの「ユーザーとグループの管理」（can_manage_users_groups）。blog_id は不要。'
+                . 'ロールの付与・剥奪はこのツールではできない。',
+            inputSchema => {
+                type       => 'object',
+                properties => {
+                    limit   => { type => 'integer', description => '取得件数（デフォルト20）' },
+                    offset  => { type => 'integer', description => '取得開始位置（デフォルト0）' },
+                    keyword => { type => 'string',  description => 'name / nickname / email の部分一致' },
+                    status  => {
+                        type        => 'string',
+                        enum        => ['active', 'disabled', 'pending', 'all'],
+                        description => '状態。省略時は all',
+                    },
+                    lockout => {
+                        type        => 'string',
+                        enum        => ['locked_out', 'not_locked_out'],
+                        description => 'ロック状態で絞り込み',
+                    },
+                },
+            },
+        },
+        {
+            name        => 'user_get',
+            description => 'ユーザー1件を取得する。コメント投稿者の ID は User not found。'
+                . '権限は can_manage_users_groups。返却にパスワードは含まれない。',
+            inputSchema => {
+                type     => 'object',
+                required => ['user_id'],
+                properties => {
+                    user_id => { type => 'integer', description => 'ユーザーID（user_list で確認）' },
+                },
+            },
+        },
+        {
+            name        => 'user_create',
+            description => 'ユーザーを作成する。作成直後はサイト権限なし。ロールは管理画面で付与すること（MCP からの権限昇格を避ける）。'
+                . '権限は can_manage_users_groups。パスワードはレスポンスに出さない。system_permissions は設定しない。',
+            inputSchema => {
+                type     => 'object',
+                required => ['name', 'password', 'display_name'],
+                properties => {
+                    name         => { type => 'string', description => 'ログイン名（<> 不可。AUTHOR 内で一意）' },
+                    password     => { type => 'string', description => '平文。保存時にハッシュ化。返却しない' },
+                    display_name => { type => 'string', description => '表示名（nickname）' },
+                    email        => { type => 'string', description => '推奨。パスワード回復に必要' },
+                    url          => { type => 'string', description => 'ウェブサイトURL' },
+                    status       => {
+                        type        => 'string',
+                        enum        => ['active', 'disabled', 'pending'],
+                        description => '省略時は active',
+                    },
+                },
+            },
+        },
+        {
+            name        => 'user_delete',
+            description => 'ユーザーを削除する（取り消せない）。実行前に user_get で対象を確認すること。'
+                . '自分自身は削除できない。対象がスーパーユーザーなら呼び出し元もスーパーユーザーである必要がある。'
+                . '権限は can_manage_users_groups。',
+            inputSchema => {
+                type     => 'object',
+                required => ['user_id'],
+                properties => {
+                    user_id => { type => 'integer', description => '削除するユーザーID（user_get で確認）' },
+                },
+            },
+        },
+        {
+            name        => 'user_unlock',
+            description => 'ログイン失敗によるロックを解除する。未ロックでもエラーにしない。'
+                . '権限は can_manage_users_groups。',
+            inputSchema => {
+                type     => 'object',
+                required => ['user_id'],
+                properties => {
+                    user_id => { type => 'integer', description => 'ユーザーID' },
+                },
+            },
+        },
+        {
+            name        => 'user_recover_password',
+            description => '指定ユーザーへパスワード回復メールを送る。新しいパスワードは受け取らない（直接変更はしない）。'
+                . 'email 未設定や外部認証では失敗する。権限は can_manage_users_groups。公開の未ログイン回復は提供しない。',
+            inputSchema => {
+                type     => 'object',
+                required => ['user_id'],
+                properties => {
+                    user_id => { type => 'integer', description => 'ユーザーID' },
                 },
             },
         },
