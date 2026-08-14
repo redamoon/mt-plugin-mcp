@@ -21,7 +21,12 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `page_update` | 固定ページ更新（`folder_id: 0` でフォルダ解除） |
 | `page_delete` | 固定ページ削除 |
 | `page_preview` | 固定ページを Page アーカイブとしてビルド（ファイルは書き出さない） |
-| `category_list` | カテゴリ一覧取得 |
+| `category_list` | 記事カテゴリ一覧取得（フォルダ・カテゴリセットは含まない） |
+| `category_get` | 記事カテゴリ1件取得 |
+| `category_create` | 記事カテゴリ作成 |
+| `category_update` | 記事カテゴリ更新 |
+| `category_delete` | 記事カテゴリ削除（取り消せない） |
+| `category_permutate` | 記事カテゴリの表示順変更（全 ID の完全一致が必要） |
 | `tag_list` | タグ一覧取得（記事・ページ・アセット・コンテンツデータ） |
 | `tag_rename` | サイト内のタグ名変更（取り消せない。他サイト利用時は clone＋付け替え） |
 | `tag_delete` | サイトからタグを外す（取り消せない。関連オブジェクトから外れる） |
@@ -70,7 +75,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `rebuild_content_data` | コンテンツデータ1件を再構築 |
 | `rebuild_site` | ブログ全体を再構築（`archive_type` で範囲を絞り込み可） |
 
-> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` / `templatemap_*` の書き込み / `widgetset_*` の書き込みは **「テンプレートの編集」権限**（`edit_templates`）を必要とします。`page_*` は **「ページの管理」権限**（`manage_pages`）を必要とします。`folder_create` / `folder_update` は `save_folder`、`folder_delete` は `delete_folder`（いずれも `manage_pages` に含まれます）。
+> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` / `templatemap_*` の書き込み / `widgetset_*` の書き込みは **「テンプレートの編集」権限**（`edit_templates`）を必要とします。`page_*` は **「ページの管理」権限**（`manage_pages`）を必要とします。`folder_create` / `folder_update` は `save_folder`、`folder_delete` は `delete_folder`（いずれも `manage_pages` に含まれます）。`category_create` / `category_update` は `save_category`、`category_delete` は `delete_category`、`category_permutate` は `edit_categories`（いずれも「カテゴリの管理」）。記事カテゴリの変更は公開ファイルを自動再構築しないため、カテゴリアーカイブを出す場合は `rebuild_site` に `archive_type: Category` を指定する。フォルダ操作は `folder_*`（別ツール）であり、カテゴリセット CRUD はこの PR の対象外。
 >
 > `template_preview` は任意の本文を MT テンプレートとして評価するため、保存と同等の権限を要求しています。`AllowFileInclude` を有効にしている環境では `<mt:Include file="...">` でサーバー上のファイルを読み出せてしまうためです。構文チェックのみで評価を伴わない `template_validate` はブログへのアクセス権限で実行できます。
 
@@ -87,7 +92,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `content_data_update` | コンテンツデータ更新（部分更新対応） |
 | `content_data_delete` | コンテンツデータ削除 |
 
-> 削除系ツール（`entry_delete` / `page_delete` / `folder_delete` / `asset_delete` / `template_delete` / `templatemap_delete` / `widgetset_delete` / `content_data_delete`）は取り消せない操作です。AI が実行する前に対象を一覧・取得系ツールで確認するよう促してください。
+> 削除系ツール（`entry_delete` / `page_delete` / `folder_delete` / `category_delete` / `asset_delete` / `template_delete` / `templatemap_delete` / `widgetset_delete` / `content_data_delete`）は取り消せない操作です。AI が実行する前に対象を一覧・取得系ツールで確認するよう促してください。
 
 ### AI の操作フロー
 
@@ -524,7 +529,7 @@ plugins/MTMCP/
             ├── Entry.pm        # entry_list / get / create / update / delete
             ├── Page.pm         # page_list / get / create / update / delete / preview
             ├── Folder.pm       # folder_list / get / create / update / delete
-            ├── Category.pm     # category_list
+            ├── Category.pm     # category_list / get / create / update / delete / permutate
             ├── Tag.pm          # tag_list / rename / delete
             ├── Asset.pm        # asset_list / get / upload / delete / thumbnail
             ├── Template.pm     # template_list / get / create / update / delete / validate / preview / tag_list

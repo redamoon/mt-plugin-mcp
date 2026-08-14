@@ -21,7 +21,12 @@ my %TOOL_HANDLERS = (
     'page_update'     => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::update(@_)       },
     'page_delete'     => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::remove(@_)       },
     'page_preview'    => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::preview(@_)      },
-    'category_list'   => sub { require MTMCP::Tools::Category; MTMCP::Tools::Category::list(@_)     },
+    'category_list'      => sub { require MTMCP::Tools::Category; MTMCP::Tools::Category::list(@_)      },
+    'category_get'       => sub { require MTMCP::Tools::Category; MTMCP::Tools::Category::get(@_)       },
+    'category_create'    => sub { require MTMCP::Tools::Category; MTMCP::Tools::Category::create(@_)    },
+    'category_update'    => sub { require MTMCP::Tools::Category; MTMCP::Tools::Category::update(@_)    },
+    'category_delete'    => sub { require MTMCP::Tools::Category; MTMCP::Tools::Category::remove(@_)    },
+    'category_permutate' => sub { require MTMCP::Tools::Category; MTMCP::Tools::Category::permutate(@_) },
     'tag_list'        => sub { require MTMCP::Tools::Tag;      MTMCP::Tools::Tag::list(@_)         },
     'tag_rename'      => sub { require MTMCP::Tools::Tag;      MTMCP::Tools::Tag::rename(@_)       },
     'tag_delete'      => sub { require MTMCP::Tools::Tag;      MTMCP::Tools::Tag::remove(@_)       },
@@ -281,12 +286,77 @@ sub _tool_definitions {
         },
         {
             name        => 'category_list',
-            description => '指定ブログのカテゴリ一覧を取得する。entry_create でカテゴリを指定する前に呼ぶこと。',
+            description => '指定ブログの記事カテゴリ一覧を取得する。フォルダ（folder_list）やカテゴリセットは含まない。entry_create の category_ids や category_permutate の前に呼ぶこと。',
             inputSchema => {
                 type     => 'object',
                 required => ['blog_id'],
                 properties => {
-                    blog_id => { type => 'integer', description => 'ブログID' },
+                    blog_id   => { type => 'integer', description => 'ブログID' },
+                    parent_id => { type => 'integer', description => '親カテゴリID。0 でトップレベルのみ。省略時は全件' },
+                },
+            },
+        },
+        {
+            name        => 'category_get',
+            description => '記事カテゴリを1件取得する。フォルダIDやカテゴリセットのカテゴリは見つからない。',
+            inputSchema => {
+                type     => 'object',
+                required => ['category_id'],
+                properties => {
+                    category_id => { type => 'integer', description => 'カテゴリID' },
+                },
+            },
+        },
+        {
+            name        => 'category_create',
+            description => '記事カテゴリを作成する。フォルダやカテゴリセットの作成ではない。親は同じブログの記事カテゴリに限る。権限はカテゴリの管理（save_category）。公開ファイルは自動再構築しない（必要なら rebuild_site の archive_type Category）。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id', 'label'],
+                properties => {
+                    blog_id     => { type => 'integer', description => 'ブログID' },
+                    label       => { type => 'string',  description => 'カテゴリ名（100文字以内。同じ親配下で一意）' },
+                    basename    => { type => 'string',  description => 'URL パス用 basename（省略時は自動生成）' },
+                    parent_id   => { type => 'integer', description => '親カテゴリID（省略時はトップレベル）' },
+                    description => { type => 'string',  description => '説明' },
+                },
+            },
+        },
+        {
+            name        => 'category_update',
+            description => '記事カテゴリを更新する。指定したフィールドのみ上書き（最低1つ必要）。フォルダIDやカテゴリセットのカテゴリは更新できない。権限はカテゴリの管理（save_category）。',
+            inputSchema => {
+                type     => 'object',
+                required => ['category_id'],
+                properties => {
+                    category_id => { type => 'integer', description => 'カテゴリID' },
+                    label       => { type => 'string',  description => '新しいカテゴリ名（100文字以内）' },
+                    basename    => { type => 'string',  description => '新しい basename' },
+                    parent_id   => { type => 'integer', description => '新しい親カテゴリID。0 でトップレベル' },
+                    description => { type => 'string',  description => '新しい説明' },
+                },
+            },
+        },
+        {
+            name        => 'category_delete',
+            description => '記事カテゴリを削除する。取り消せない操作なので、実行前に対象を確認すること。子カテゴリは親へ繰り上がる。権限はカテゴリの管理（delete_category）。公開ファイルは自動再構築しない（必要なら rebuild_site の archive_type Category）。',
+            inputSchema => {
+                type     => 'object',
+                required => ['category_id'],
+                properties => {
+                    category_id => { type => 'integer', description => '削除するカテゴリのID' },
+                },
+            },
+        },
+        {
+            name        => 'category_permutate',
+            description => '指定ブログの記事カテゴリ表示順を並べ替える。category_ids は先に category_list で取った当該ブログの記事カテゴリ全 ID と完全一致させること。権限はカテゴリの管理（edit_categories）。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id', 'category_ids'],
+                properties => {
+                    blog_id      => { type => 'integer', description => 'ブログID' },
+                    category_ids => { type => 'array', items => { type => 'integer' }, description => '並べ替え後のカテゴリID（全件・重複なし）' },
                 },
             },
         },
