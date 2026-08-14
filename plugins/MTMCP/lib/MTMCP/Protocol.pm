@@ -52,6 +52,8 @@ my %TOOL_HANDLERS = (
     'widgetset_update'     => sub { require MTMCP::Tools::Widget;       MTMCP::Tools::Widget::update(@_)         },
     'widgetset_delete'     => sub { require MTMCP::Tools::Widget;       MTMCP::Tools::Widget::remove(@_)         },
     'widget_list'          => sub { require MTMCP::Tools::Widget;       MTMCP::Tools::Widget::list_widgets(@_)   },
+    'log_list'             => sub { require MTMCP::Tools::Log;          MTMCP::Tools::Log::list(@_)              },
+    'log_get'              => sub { require MTMCP::Tools::Log;          MTMCP::Tools::Log::get(@_)               },
     'rebuild_site'         => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::site(@_)          },
     'rebuild_template'     => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::template(@_)      },
     'rebuild_entry'        => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::entry(@_)         },
@@ -907,6 +909,46 @@ sub _tool_definitions {
                     blog_id      => { type => 'integer', description => 'ブログID（blog_list で確認）' },
                     archive_type => { type => 'string',  description => '再構築するアーカイブタイプ（Individual, Monthly, Category, Page など）。省略時は全アーカイブ' },
                     no_indexes   => { type => 'boolean', description => 'true にするとインデックステンプレートの再構築をスキップする' },
+                },
+            },
+        },
+        {
+            name        => 'log_list',
+            description => 'アクティビティログ（システムログ）を新しい順に取得する。公開失敗・権限エラー・プラグイン障害などのトラブルシュート時に、管理画面へ切り替えなくても level・期間・キーワードで原因を追うために使う。'
+                . 'blog_id を省略または 0 にすると、権限のある範囲のシステム全体。サイト単位なら blog_id を指定する（ウェブサイト配下の子ブログは自動では含めない）。'
+                . '権限はシステムの view_log、または対象サイトの view_blog_log。書き込み・リセット・エクスポートはできない。',
+            inputSchema => {
+                type       => 'object',
+                properties => {
+                    blog_id    => { type => 'integer', description => 'サイトID。省略または 0 は権限のある範囲のシステム全体' },
+                    limit      => { type => 'integer', description => '取得件数（デフォルト20）' },
+                    offset     => { type => 'integer', description => '取得開始位置（デフォルト0）' },
+                    level      => {
+                        type        => 'string',
+                        enum        => [
+                            'security', 'error', 'warning', 'notice', 'info', 'debug',
+                            'security_or_error', 'security_or_error_or_warning',
+                            'not_debug', 'debug_or_error',
+                        ],
+                        description => 'ログレベル（MT::Log の連番定数。notice は warning ではない）',
+                    },
+                    class      => { type => 'string', description => 'system / entry / page / comment / ping / plugin など。省略時は全クラス' },
+                    category   => { type => 'string', description => 'publish / delete / reset_log など' },
+                    date_from  => { type => 'string', description => 'YYYY-MM-DD（created_on 下限、GMT）' },
+                    date_to    => { type => 'string', description => 'YYYY-MM-DD（created_on 上限、GMT）' },
+                    keyword    => { type => 'string', description => 'message と ip の部分一致（DB LIKE）' },
+                },
+            },
+        },
+        {
+            name        => 'log_get',
+            description => 'ログ1件の詳細（metadata の生文字列を含む）を取得する。log_list で ID を確認してから、長いメッセージや付随データを見るときに使う。'
+                . '権限は対象ログのサイトに対する view_log（システム）または view_blog_log。見つからなければ Log not found。',
+            inputSchema => {
+                type     => 'object',
+                required => ['log_id'],
+                properties => {
+                    log_id => { type => 'integer', description => 'ログID（log_list で確認）' },
                 },
             },
         },

@@ -68,6 +68,15 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `rebuild_content_data` | コンテンツデータ1件を再構築 |
 | `rebuild_site` | ブログ全体を再構築（`archive_type` で範囲を絞り込み可） |
 
+### ログ（読み取り）
+
+| ツール名 | 説明 |
+|---|---|
+| `log_list` | アクティビティログ一覧（`level` / 期間 / `keyword` で絞り込み。`blog_id` 省略または `0` は権限範囲のシステム全体） |
+| `log_get` | ログ1件取得（`metadata` 含む。list では省略） |
+
+> `log_list` / `log_get` は MT の **「ログの閲覧」** 権限が必要です。システム全体は `view_log`、サイト単位は `view_blog_log`（`view_log` があればサイト指定も可）。作成・更新・削除・リセット・エクスポートはありません。
+
 > 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` / `templatemap_*` の書き込み / `widgetset_*` の書き込みは **「テンプレートの編集」権限**（`edit_templates`）を必要とします。`page_*` は **「ページの管理」権限**（`manage_pages`）を必要とします。`folder_create` / `folder_update` は `save_folder`、`folder_delete` は `delete_folder`（いずれも `manage_pages` に含まれます）。
 >
 > `template_preview` は任意の本文を MT テンプレートとして評価するため、保存と同等の権限を要求しています。`AllowFileInclude` を有効にしている環境では `<mt:Include file="...">` でサーバー上のファイルを読み出せてしまうためです。構文チェックのみで評価を伴わない `template_validate` はブログへのアクセス権限で実行できます。
@@ -300,7 +309,7 @@ MT 管理画面で **システム > プラグイン > MT MCP Server** を開き�
 
 #### 権限について
 
-各ツールは、トークンに紐づくユーザーがブログへのアクセス権限（MT の Permission）を持っているかを確認します。権限のないブログの記事・アセット・テンプレート・コンテンツデータは操作できません（システム管理者は全ブログを操作可能）。
+各ツールは、トークンに紐づくユーザーがブログへのアクセス権限（MT の Permission）を持っているかを確認します。権限のないブログの記事・アセット・テンプレート・コンテンツデータは操作できません（システム管理者は全ブログを操作可能）。`log_list` / `log_get` はブログアクセスではなく `view_log` / `view_blog_log` を確認します（`blog_id=0` のシステムログも対象）。
 
 > 本機能導入前に発行された、ユーザーが紐づかない古い形式のトークンは **401 エラーで拒否されます**（ブログ権限チェックを回避できてしまうため）。古いトークンをお使いの場合は、上記いずれかの方法で新しいトークンを再発行してください。
 
@@ -527,6 +536,7 @@ plugins/MTMCP/
             ├── Template.pm     # template_list / get / create / update / delete / validate / preview / tag_list
             ├── TemplateMap.pm  # templatemap_list / get / create / update / delete
             ├── Widget.pm       # widgetset_* / widget_list
+            ├── Log.pm          # log_list / log_get
             ├── Rebuild.pm      # rebuild_template / entry / page / content_data / site
             ├── ContentType.pm  # content_type_list / get / create
             └── ContentData.pm  # content_data_list / get / create / update / delete
