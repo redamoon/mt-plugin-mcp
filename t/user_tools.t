@@ -363,4 +363,87 @@ my $app = FakeApp->new(user => $caller, config => FakeConfig->new());
     like($@, qr/new password must not be passed/, '新しいパスワード引数は拒否');
 }
 
+# ------------------------------------------------------------------
+# 11. user_update profile fields (no password / no grant)
+# ------------------------------------------------------------------
+
+{
+    MT::Author::reset();
+    _seed(id => 1, name => 'alice', nickname => 'Old', email => 'old@example.com', url => 'https://old.example');
+    my $got = MTMCP::Tools::User::update($app, {
+        user_id      => 1,
+        display_name => 'Alice',
+        email        => 'alice@example.com',
+        url          => 'https://alice.example',
+        status       => 'disabled',
+    });
+    is($got->{display_name}, 'Alice', 'display_name を更新');
+    is($got->{email}, 'alice@example.com', 'email を更新');
+    is($got->{url}, 'https://alice.example', 'url を更新');
+    is($got->{status}, 'disabled', 'status を更新');
+    is($got->{name}, 'alice', 'login name は変わらない');
+    ok(!exists $got->{password}, 'update 返却に password が無い');
+    my $stored = MT::Author->load({ id => 1, type => MT::Author::AUTHOR() });
+    is($stored->nickname, 'Alice', 'nickname が保存される');
+    is($stored->status, MT::Author::INACTIVE(), 'disabled は INACTIVE');
+}
+
+{
+    MT::Author::reset();
+    _seed(id => 1, name => 'alice', nickname => 'Alice', email => 'a@example.com');
+    my $got = MTMCP::Tools::User::update($app, { user_id => 1, display_name => 'Alicia' });
+    is($got->{display_name}, 'Alicia', '部分更新');
+    is($got->{email}, 'a@example.com', '未指定の email は維持');
+}
+
+{
+    MT::Author::reset();
+    _seed(id => 1, name => 'alice');
+    my $got = eval { MTMCP::Tools::User::update($app, { user_id => 1 }) };
+    like($@, qr/no updatable fields/, 'フィールドなしは失敗');
+}
+
+{
+    MT::Author::reset();
+    _seed(id => 1, name => 'alice');
+    my $got = eval {
+        MTMCP::Tools::User::update($app, { user_id => 1, display_name => 'A', password => 'secret' });
+    };
+    like($@, qr/password must not be passed/, 'password 引数は拒否');
+}
+
+{
+    MT::Author::reset();
+    _seed(id => 1, name => 'alice');
+    my $got = eval {
+        MTMCP::Tools::User::update($app, { user_id => 1, name => 'bob' });
+    };
+    like($@, qr/login name cannot be changed/, 'ログイン名変更は拒否');
+}
+
+{
+    MT::Author::reset();
+    _seed(id => 1, name => 'alice');
+    my $got = eval {
+        MTMCP::Tools::User::update($app, { user_id => 1, roles => [1] });
+    };
+    like($@, qr/permissions cannot be granted/, '権限付与は拒否');
+}
+
+{
+    MT::Author::reset();
+    _seed(id => 5, name => 'guest', type => MT::Author::COMMENTER());
+    my $got = eval { MTMCP::Tools::User::update($app, { user_id => 5, display_name => 'G' }) };
+    like($@, qr/User not found: 5/, 'COMMENTER は User not found');
+}
+
+{
+    MT::Author::reset();
+    _seed(id => 1, name => 'alice');
+    my $got = eval {
+        MTMCP::Tools::User::update($app, { user_id => 1, email => 'not-an-email' });
+    };
+    like($@, qr/Invalid email/, '不正な email は拒否');
+}
+
 done_testing();

@@ -318,7 +318,7 @@ plugins/MTMCP/
             ├── TemplateMap.pm  # templatemap_list / get / create / update / delete
             ├── Widget.pm       # widgetset_* / widget_list
             ├── Log.pm          # log_list / log_get
-            ├── User.pm         # user_list / get / create / delete / unlock / recover_password
+            ├── User.pm         # user_list / get / create / update / delete / unlock / recover_password
             ├── Rebuild.pm      # rebuild_template / entry / page / content_data / site
             ├── ContentType.pm  # content_type_list / get / create
             └── ContentData.pm  # content_data_list / get / create / update / delete
