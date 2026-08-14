@@ -23,4 +23,11 @@ sub make_unique_category_basename {
     return $label;
 }
 
+
+sub is_valid_email {
+    my ($email) = @_;
+    return 0 unless defined $email && $email ne '';
+    return $email =~ /^[^\s@]+@[^\s@]+\.[^\s@]+$/ ? 1 : 0;
+}
+
 1;
