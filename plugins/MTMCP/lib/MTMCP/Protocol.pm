@@ -41,6 +41,11 @@ my %TOOL_HANDLERS = (
     'template_validate'    => sub { require MTMCP::Tools::Template;     MTMCP::Tools::Template::validate(@_)     },
     'template_preview'     => sub { require MTMCP::Tools::Template;     MTMCP::Tools::Template::preview(@_)      },
     'template_tag_list'    => sub { require MTMCP::Tools::Template;     MTMCP::Tools::Template::tag_list(@_)     },
+    'templatemap_list'     => sub { require MTMCP::Tools::TemplateMap;  MTMCP::Tools::TemplateMap::list(@_)      },
+    'templatemap_get'      => sub { require MTMCP::Tools::TemplateMap;  MTMCP::Tools::TemplateMap::get(@_)       },
+    'templatemap_create'   => sub { require MTMCP::Tools::TemplateMap;  MTMCP::Tools::TemplateMap::create(@_)    },
+    'templatemap_update'   => sub { require MTMCP::Tools::TemplateMap;  MTMCP::Tools::TemplateMap::update(@_)    },
+    'templatemap_delete'   => sub { require MTMCP::Tools::TemplateMap;  MTMCP::Tools::TemplateMap::remove(@_)    },
     'rebuild_site'         => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::site(@_)          },
     'rebuild_template'     => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::template(@_)      },
     'rebuild_entry'        => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::entry(@_)         },
@@ -442,7 +447,7 @@ sub _tool_definitions {
         },
         {
             name        => 'template_get',
-            description => 'テンプレートIDを指定して本文ごと取得する。',
+            description => 'テンプレートIDを指定して本文ごと取得する。アーカイブ系（individual / page / archive など）では maps 配列（テンプレートマップ）も返す。',
             inputSchema => {
                 type     => 'object',
                 required => ['template_id'],
@@ -457,6 +462,8 @@ sub _tool_definitions {
                 . '保存前に MT テンプレート構文を自動検証し、エラーがあれば行番号付きで返して保存を中止する（その場合は本文を修正して再実行すること）。'
                 . '本文を書く前に template_tag_list で使えるタグを確認し、既存テンプレートの書き方を template_get で参考にすると成功しやすい。'
                 . 'type が index のときは outfile（出力ファイル名）も必ず指定すること。'
+                . 'アーカイブ系（individual / page / archive / category / author / ct / ct_archive）は maps または archive_type を付けないと公開できない。無い場合は warning を返すので templatemap_create を続けること。'
+                . 'type が ct / ct_archive のときは content_type_id が必須。'
                 . 'type が widgetset のときは body を指定できない（指定するとエラー。本文はウィジェット構成から自動生成され、渡した body は保存されない）。'
                 . '作成しただけでは公開ファイルは生成されないため、必要に応じて rebuild_template を実行すること。',
             inputSchema => {
@@ -472,6 +479,23 @@ sub _tool_definitions {
                     build_type => { type => 'integer', enum => [0, 1, 2, 3, 4, 5], description => '公開方法。0=公開しない / 1=すぐに公開（オンデマンド） / 2=手動 / 3=ダイナミック / 4=バックグラウンド / 5=スケジュール。省略時は MT のデフォルト' },
                     rebuild_me => { type => 'boolean', description => 'インデックスの再構築時に一緒に再構築するか（index系テンプレート向け）' },
                     skip_validation => { type => 'boolean', description => '構文検証をスキップして強制的に保存する。通常は指定しないこと' },
+                    archive_type => { type => 'string', description => 'アーカイブ系テンプレート作成時のショートカット。内部で maps: [{ archive_type }] になる（例: Individual / Page）' },
+                    maps => {
+                        type  => 'array',
+                        items => {
+                            type       => 'object',
+                            properties => {
+                                archive_type  => { type => 'string' },
+                                file_template => { type => 'string' },
+                                is_preferred  => { type => 'boolean' },
+                                build_type    => { type => 'integer' },
+                                cat_field_id  => { type => 'integer' },
+                                dt_field_id   => { type => 'integer' },
+                            },
+                        },
+                        description => '作成と同時に付けるテンプレートマップ',
+                    },
+                    content_type_id => { type => 'integer', description => 'type が ct / ct_archive のとき必須' },
                 },
             },
         },
@@ -554,6 +578,77 @@ sub _tool_definitions {
                 },
             },
         },
+        {
+            name        => 'templatemap_list',
+            description => 'アーカイブテンプレートに紐づくテンプレートマップ（URL/出力パス）の一覧。アーカイブテンプレート作成後に rebuild_template できるようにするにはマップが必要。',
+            inputSchema => {
+                type     => 'object',
+                required => ['template_id'],
+                properties => {
+                    template_id  => { type => 'integer', description => '親テンプレートID' },
+                    archive_type => { type => 'string',  description => 'アーカイブタイプで絞る（Individual, Page, Monthly など）' },
+                    limit        => { type => 'integer' },
+                    offset       => { type => 'integer' },
+                },
+            },
+        },
+        {
+            name        => 'templatemap_get',
+            description => 'テンプレートマップ1件を取得する。',
+            inputSchema => {
+                type     => 'object',
+                required => ['templatemap_id'],
+                properties => {
+                    templatemap_id => { type => 'integer', description => 'テンプレートマップID' },
+                },
+            },
+        },
+        {
+            name        => 'templatemap_create',
+            description => 'アーカイブテンプレートにマップを追加する。保存時の自動再構築はしない。反映には rebuild_template を使うこと。file_template を省略するとアーカイバのデフォルトを使う。同じ出力パスを複数マップが指しうる点に注意。',
+            inputSchema => {
+                type     => 'object',
+                required => ['template_id', 'archive_type'],
+                properties => {
+                    template_id   => { type => 'integer', description => '親テンプレートID（individual / page / archive / category / author / ct / ct_archive）' },
+                    archive_type  => { type => 'string',  description => '例: Individual, Page, Monthly, Category, ContentType' },
+                    file_template => { type => 'string',  description => '出力パスのテンプレート。省略時はデフォルト' },
+                    is_preferred  => { type => 'boolean', description => '優先マップにするか' },
+                    build_type    => { type => 'integer', enum => [0, 1, 2, 3, 4, 5], description => '0=公開しない / 1=すぐに公開 / 2=手動 / 3=ダイナミック / 4=バックグラウンド / 5=スケジュール。省略時は 1' },
+                    cat_field_id  => { type => 'integer', description => 'CT カテゴリアーカイブ用カテゴリフィールドID' },
+                    dt_field_id   => { type => 'integer', description => 'CT 日付アーカイブ用日付フィールドID' },
+                },
+            },
+        },
+        {
+            name        => 'templatemap_update',
+            description => 'テンプレートマップを部分更新する（最低1フィールド）。is_preferred を立てると他マップの preferred は外れる。自動再構築はしない。',
+            inputSchema => {
+                type     => 'object',
+                required => ['templatemap_id'],
+                properties => {
+                    templatemap_id => { type => 'integer' },
+                    archive_type   => { type => 'string' },
+                    file_template  => { type => 'string' },
+                    is_preferred   => { type => 'boolean' },
+                    build_type     => { type => 'integer', enum => [0, 1, 2, 3, 4, 5] },
+                    cat_field_id   => { type => 'integer' },
+                    dt_field_id    => { type => 'integer' },
+                },
+            },
+        },
+        {
+            name        => 'templatemap_delete',
+            description => 'テンプレートマップを削除する。FileInfo は消えるが公開済み静的ファイルは残ることがある。',
+            inputSchema => {
+                type     => 'object',
+                required => ['templatemap_id'],
+                properties => {
+                    templatemap_id => { type => 'integer' },
+                },
+            },
+        },
+
         {
             name        => 'content_type_list',
             description => '指定ブログのコンテンツタイプ一覧を取得する。content_data_* 操作の前に呼んで content_type_id を確認すること。',
@@ -672,7 +767,7 @@ sub _tool_definitions {
             name        => 'rebuild_template',
             description => 'テンプレート1枚を再構築（公開）して、変更を実際のファイルに反映する。'
                 . 'template_create / template_update のあとに使うのはこのツール（rebuild_site より圧倒的に速い）。'
-                . 'インデックステンプレートはそのファイルのみ、アーカイブテンプレートは紐づくアーカイブタイプのみを再構築する。',
+                . 'インデックステンプレートはそのファイルのみ、アーカイブテンプレートは紐づくアーカイブタイプのみを再構築する（マップ未設定なら失敗するので先に templatemap_create）。',
             inputSchema => {
                 type     => 'object',
                 required => ['template_id'],

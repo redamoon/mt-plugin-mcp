@@ -1,6 +1,7 @@
 package MTMCP::Tools::Template;
 use strict;
 use warnings;
+use utf8;
 use JSON;
 use MT::Template;
 use MTMCP::Perm;
@@ -47,6 +48,10 @@ sub create {
 
     _assert_widgetset_body($type, $args);
 
+    if (($type eq 'ct' || $type eq 'ct_archive') && !$args->{content_type_id}) {
+        die "type が ct / ct_archive のときは content_type_id が必要です\n";
+    }
+
     my $body = $args->{body} // '';
     _assert_valid($blog_id, $body, $type, $args->{skip_validation});
     _assert_outfile($type, $args->{outfile}, $args->{build_type});
@@ -56,10 +61,36 @@ sub create {
     $tmpl->name($name);
     $tmpl->type($type);
     $tmpl->text($body);
+    $tmpl->content_type_id($args->{content_type_id}) if defined $args->{content_type_id};
     _apply_optional_columns($tmpl, $args);
     $tmpl->save or die $tmpl->errstr . "\n";
 
-    return { template_id => $tmpl->id, status => 'created', name => $tmpl->name, type => $tmpl->type };
+    my $result = {
+        template_id => $tmpl->id,
+        status      => 'created',
+        name        => $tmpl->name,
+        type        => $tmpl->type,
+    };
+
+    my @map_specs = _normalize_map_specs($args);
+    if (@map_specs) {
+        require MTMCP::Tools::TemplateMap;
+        my @created;
+        for my $spec (@map_specs) {
+            push @created, MTMCP::Tools::TemplateMap::create($app, {
+                %$spec,
+                template_id => $tmpl->id,
+            });
+        }
+        $result->{maps}            = \@created;
+        $result->{templatemap_ids} = [ map { $_->{templatemap_id} } @created ];
+    }
+    elsif (_is_archive_type($type)) {
+        $result->{warning}
+            = 'アーカイブテンプレートにはテンプレートマップが必要です。templatemap_create でアーカイブタイプを設定してください';
+    }
+
+    return $result;
 }
 
 sub remove {
@@ -376,6 +407,26 @@ sub _apply_optional_columns {
     return;
 }
 
+# template_create の maps 配列、または archive_type ショートカットを正規化する。
+sub _normalize_map_specs {
+    my ($args) = @_;
+    if (defined $args->{maps}) {
+        die "maps はオブジェクトの配列で指定してください\n"
+            unless ref $args->{maps} eq 'ARRAY';
+        return @{ $args->{maps} };
+    }
+    if (defined $args->{archive_type} && $args->{archive_type} ne '') {
+        return ({ archive_type => $args->{archive_type} });
+    }
+    return ();
+}
+
+sub _is_archive_type {
+    my ($type) = @_;
+    require MTMCP::Tools::TemplateMap;
+    return MTMCP::Tools::TemplateMap::_is_archive_template($type);
+}
+
 sub _to_hash {
     my ($tmpl, $full) = @_;
     my $hash = { id => $tmpl->id, name => $tmpl->name, type => $tmpl->type };
@@ -385,6 +436,10 @@ sub _to_hash {
         $hash->{outfile}    = $tmpl->outfile;
         $hash->{identifier} = $tmpl->identifier;
         $hash->{build_type} = $tmpl->build_type;
+        if (_is_archive_type($tmpl->type)) {
+            require MTMCP::Tools::TemplateMap;
+            $hash->{maps} = MTMCP::Tools::TemplateMap::list_for_template($tmpl);
+        }
     }
     return $hash;
 }
