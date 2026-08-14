@@ -119,7 +119,9 @@ sub entry {
     my ($app, $args) = @_;
     my $entry_id = $args->{entry_id} or die "entry_id is required\n";
     require MT::Entry;
-    my $entry = MT::Entry->load($entry_id) or die "Entry not found: $entry_id\n";
+    # スカラー load は Page も返すため、class => 'entry' で記事に限定する。
+    my $entry = MT::Entry->load({ id => $entry_id, class => 'entry' })
+        or die "Entry not found: $entry_id\n";
     _require_rebuild_perm($app, $entry->blog_id);
     my $blog = _load_blog($entry->blog_id);
 
