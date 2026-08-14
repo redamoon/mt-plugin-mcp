@@ -6,6 +6,7 @@ use MT::Log;
 use MTMCP::Perm;
 
 use constant MESSAGE_LIST_LIMIT => 500;
+use constant MAX_LIMIT          => 200;
 
 my %LEVEL_TO_IDS = (
     debug                         => [ MT::Log::DEBUG() ],
@@ -39,6 +40,9 @@ sub list {
 
     my $limit  = $args->{limit}  // 20;
     my $offset = $args->{offset} // 0;
+    $limit  = 20 if !$limit || $limit < 1;
+    $limit  = MAX_LIMIT if $limit > MAX_LIMIT;
+    $offset = 0 if !defined $offset || $offset < 0;
 
     my %terms = ( class => '*' );
     if ($blog_id) {
@@ -82,9 +86,10 @@ sub list {
         offset    => $offset,
     );
     my @logs  = MT::Log->load(\%terms, \%opts);
+    my $cache = {};
     return {
         total => $total,
-        items => [ map { _to_hash($_, 0) } @logs ],
+        items => [ map { _to_hash($_, 0, $cache) } @logs ],
     };
 }
 
@@ -144,18 +149,20 @@ sub _level_to_name {
 }
 
 sub _author_name {
-    my ($author_id) = @_;
+    my ($author_id, $cache) = @_;
     return '' unless $author_id;
+    return $cache->{$author_id} if $cache && exists $cache->{$author_id};
     my $author = eval {
         require MT::Author;
         MT::Author->load($author_id);
     };
-    return '' unless $author;
-    return $author->nickname || $author->name || '';
+    my $name = $author ? ($author->nickname || $author->name || '') : '';
+    $cache->{$author_id} = $name if $cache;
+    return $name;
 }
 
 sub _to_hash {
-    my ($log, $full) = @_;
+    my ($log, $full, $cache) = @_;
     my $message = $log->message // '';
     my $truncated = 0;
     if (!$full && length($message) > MESSAGE_LIST_LIMIT) {
@@ -172,7 +179,7 @@ sub _to_hash {
         truncated   => $truncated ? 1 : 0,
         ip          => $log->ip,
         author_id   => $log->author_id,
-        author_name => _author_name($log->author_id),
+        author_name => _author_name($log->author_id, $cache),
         created_on  => $log->created_on,
     };
     if ($full) {

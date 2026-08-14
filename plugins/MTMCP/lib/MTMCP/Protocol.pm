@@ -1111,8 +1111,8 @@ sub _tool_definitions {
                 type       => 'object',
                 properties => {
                     blog_id    => { type => 'integer', description => 'サイトID。省略または 0 は権限のある範囲のシステム全体' },
-                    limit      => { type => 'integer', description => '取得件数（デフォルト20）' },
-                    offset     => { type => 'integer', description => '取得開始位置（デフォルト0）' },
+                    limit      => { type => 'integer', description => '取得件数（デフォルト20、最大200）' },
+                    offset     => { type => 'integer', description => '取得開始位置（デフォルト0、負値は0）' },
                     level      => {
                         type        => 'string',
                         enum        => [

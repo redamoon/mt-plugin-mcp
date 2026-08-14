@@ -21,7 +21,10 @@ use MTMCP::Tools::User;
     }
     sub id                       { $_[0]{id} }
     sub is_superuser             { $_[0]{is_superuser} }
-    sub can_manage_users_groups  { $_[0]{can_manage_users_groups} }
+    sub can_manage_users_groups  {
+        return 1 if $_[0]{is_superuser};
+        return $_[0]{can_manage_users_groups};
+    }
 }
 {
     package FakeConfig;
@@ -97,14 +100,13 @@ sub _seed {
 }
 
 {
-    my $got = eval {
+    my $ok = eval {
         MTMCP::Perm::require_manage_users(
             _app(id => 2, is_superuser => 1, can_manage_users_groups => 0)
         );
+        1;
     };
-    my $err = $@;
-    ok(!$got, 'is_superuser だけでは通さない');
-    like($err, qr/ユーザーを管理する権限がありません/, 'is_superuser-only は権限エラー');
+    ok($ok, 'is_superuser は can_manage_users_groups 相当で通る') or diag($@);
 }
 
 {
@@ -141,6 +143,17 @@ my $app = FakeApp->new(user => $caller, config => FakeConfig->new());
     is($MT::Author::LAST_LOAD_ARGS->{sort}, 'name', 'sort name');
     is($MT::Author::LAST_LOAD_ARGS->{direction}, 'ascend', 'ascend');
     ok(!exists $got->[0]{password}, 'list に password が無い');
+}
+
+{
+    MT::Author::reset();
+    _seed(id => 1, name => 'active-user', status => MT::Author::ACTIVE());
+    _seed(id => 2, name => 'disabled-user', status => MT::Author::INACTIVE());
+    _seed(id => 3, name => 'pending-user', status => MT::Author::PENDING());
+    my $got = MTMCP::Tools::User::list($app, { status => 'disabled' });
+    my @names = map { $_->{name} } @$got;
+    is_deeply(\@names, ['disabled-user'], 'status=disabled は INACTIVE のみ');
+    is($MT::Author::LAST_LOAD_TERMS->{status}, MT::Author::INACTIVE(), 'disabled は INACTIVE 定数');
 }
 
 # ------------------------------------------------------------------

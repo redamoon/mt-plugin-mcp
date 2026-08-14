@@ -260,4 +260,17 @@ sub _list {
     is($MT::Log::LAST_LOAD_ARGS->{direction}, 'descend', 'direction descend');
 }
 
+{
+    MT::Log::reset();
+    _seed(id => $_) for 1 .. 5;
+    _list({ limit => 0 });
+    is($MT::Log::LAST_LOAD_ARGS->{limit}, 20, 'limit 0 はデフォルト 20');
+    _list({ limit => -3 });
+    is($MT::Log::LAST_LOAD_ARGS->{limit}, 20, '負の limit はデフォルト 20');
+    _list({ limit => 100000 });
+    is($MT::Log::LAST_LOAD_ARGS->{limit}, 200, 'limit は 200 で打ち止め');
+    _list({ offset => -1 });
+    is($MT::Log::LAST_LOAD_ARGS->{offset}, 0, '負の offset は 0');
+}
+
 done_testing();

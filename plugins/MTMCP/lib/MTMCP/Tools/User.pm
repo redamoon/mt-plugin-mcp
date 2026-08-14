@@ -189,7 +189,7 @@ sub _load_author {
 sub _status_id {
     my ($status) = @_;
     return MT::Author::ACTIVE()   if $status eq 'active';
-    return INMT::Author::ACTIVE() if $status eq 'disabled';
+    return MT::Author::INACTIVE() if $status eq 'disabled';
     return MT::Author::PENDING()  if $status eq 'pending';
     die "Unknown user status: $status\n";
 }

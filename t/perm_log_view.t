@@ -17,6 +17,10 @@ use MTMCP::Perm;
     }
     sub id            { $_[0]{id} }
     sub is_superuser  { $_[0]{is_superuser} }
+    sub can_manage_users_groups {
+        return 1 if $_[0]{is_superuser};
+        return $_[0]{can_manage_users_groups};
+    }
 }
 {
     package FakeApp;
@@ -106,6 +110,26 @@ sub _app {
     );
     my $sys = MTMCP::Perm::require_log_view(_app(id => 5), undef);
     is_deeply([ sort { $a <=> $b } @$sys ], [ 1, 2 ], '複数サイトの view_blog_log を列挙');
+}
+
+{
+    my $got = eval { MTMCP::Perm::require_manage_users(FakeApp->new(undef)) };
+    like($@, qr/認証/, '未認証は die');
+
+    $got = eval { MTMCP::Perm::require_manage_users(_app(id => 6)) };
+    like($@, qr/ユーザーを管理する権限がありません/, '権限なしは die');
+
+    my $err = do {
+        eval { MTMCP::Perm::require_manage_users(_app(id => 7, can_manage_users_groups => 1)) };
+        $@;
+    };
+    ok(!$err, '権限ありは通過') or diag($err);
+
+    $err = do {
+        eval { MTMCP::Perm::require_manage_users(_app(id => 8, is_superuser => 1)) };
+        $@;
+    };
+    ok(!$err, 'superuser は通過') or diag($err);
 }
 
 done_testing();
