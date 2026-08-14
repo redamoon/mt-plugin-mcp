@@ -10,11 +10,12 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | ツール名 | 説明 |
 |---|---|
 | `blog_list` | ブログ（サイト）一覧取得 |
-| `entry_list` | 記事一覧取得（`keyword` 部分一致検索・`offset` ページネーション対応） |
+| `entry_list` | 記事一覧取得（`keyword` は DB 側 LIKE の部分一致・`offset` ページネーション対応） |
 | `entry_get` | 記事1件取得（本文含む） |
 | `entry_create` | 記事作成（デフォルト: 下書き） |
 | `entry_update` | 記事更新 |
 | `entry_delete` | 記事削除 |
+| `entry_preview` | 記事を Individual アーカイブとしてビルド（ファイルは書き出さない。`entry_create` 前の見た目確認） |
 | `page_list` | 固定ページ一覧（`folder_id` で絞り込み可） |
 | `page_get` | 固定ページ1件取得（本文含む） |
 | `page_create` | 固定ページ作成（デフォルト: 下書き。フォルダは `folder_id` 単数） |
@@ -45,12 +46,12 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 
 | ツール名 | 説明 |
 |---|---|
-| `asset_list` | アセット一覧取得（`keyword` 部分一致検索・`offset` ページネーション対応） |
+| `asset_list` | アセット一覧取得（`keyword` は DB 側 LIKE の部分一致・`offset` ページネーション対応） |
 | `asset_get` | アセット1件取得 |
 | `asset_upload` | ファイルアップロード（Base64）による新規アセット作成 |
 | `asset_delete` | アセット削除 |
 | `asset_thumbnail` | 画像アセットのサムネイルURL取得（MTの動的リサイズ機能を利用） |
-| `template_list` | テンプレート一覧取得（`keyword` 部分一致検索・`offset` ページネーション対応） |
+| `template_list` | テンプレート一覧取得（`keyword` は DB 側 LIKE の部分一致・`offset` ページネーション対応） |
 | `template_get` | テンプレート1件取得（本文・出力ファイル名・識別子・公開方法含む） |
 | `template_create` | テンプレート新規作成（保存前に構文を自動検証） |
 | `template_update` | テンプレート更新（本文・名前・タイプ・出力設定を部分更新、保存前に構文を自動検証） |
@@ -80,7 +81,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `rebuild_content_data` | コンテンツデータ1件を再構築 |
 | `rebuild_site` | ブログ全体を再構築（`archive_type` で範囲を絞り込み可） |
 
-> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` / `templatemap_*` の書き込み / `widgetset_*` の書き込みは **「テンプレートの編集」権限**（`edit_templates`）を必要とします。`page_*` は **「ページの管理」権限**（`manage_pages`）を必要とします。`folder_create` / `folder_update` は `save_folder`、`folder_delete` は `delete_folder`（いずれも `manage_pages` に含まれます）。記事カテゴリの `category_create` / `category_update` は `save_category`、`category_delete` は `delete_category`、`category_permutate` は `edit_categories`。セット内カテゴリの作成・更新は `save_catefory_set_category`（MT コアの綴り）、削除と `category_set_*` / セットの `category_permutate` は `manage_category_set`。記事カテゴリの変更は公開ファイルを自動再構築しないため、カテゴリアーカイブを出す場合は `rebuild_site` に `archive_type: Category` を指定する。フォルダ操作は `folder_*`（別ツール）。
+> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` / `templatemap_*` の書き込み / `widgetset_*` の書き込みは **「テンプレートの編集」権限**（`edit_templates`）を必要とします。`page_*` は **「ページの管理」権限**（`manage_pages`）を必要とします。`folder_create` / `folder_update` は `save_folder`、`folder_delete` は `delete_folder`（いずれも `manage_pages` に含まれます）。`entry_preview` は **「記事の作成」権限**（`create_post`）を必要とします。記事カテゴリの `category_create` / `category_update` は `save_category`、`category_delete` は `delete_category`、`category_permutate` は `edit_categories`。セット内カテゴリの作成・更新は `save_catefory_set_category`（MT コアの綴り）、削除と `category_set_*` / セットの `category_permutate` は `manage_category_set`。記事カテゴリの変更は公開ファイルを自動再構築しないため、カテゴリアーカイブを出す場合は `rebuild_site` に `archive_type: Category` を指定する。フォルダ操作は `folder_*`（別ツール）。
 >
 > **記事の `category_ids` にはカテゴリセット内のカテゴリを渡さないこと。** 記事カテゴリは `category_set_id` が 0 のものだけです。セットはコンテンツタイプの `categories` フィールドから参照します。
 >
@@ -95,7 +96,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `content_type_list` | コンテンツタイプ一覧取得 |
 | `content_type_get` | コンテンツタイプ詳細取得（フィールド定義含む） |
 | `content_type_create` | コンテンツタイプ新規作成 |
-| `content_data_list` | コンテンツデータ一覧取得（`keyword` 部分一致検索・`offset` ページネーション対応） |
+| `content_data_list` | コンテンツデータ一覧取得（`keyword` は DB 側 LIKE の部分一致・`offset` ページネーション対応） |
 | `content_data_get` | コンテンツデータ1件取得（フィールド値・ラベル含む） |
 | `content_data_create` | コンテンツデータ作成 |
 | `content_data_update` | コンテンツデータ更新（部分更新対応） |
@@ -111,6 +112,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 ```
 ユーザー: 「テスト記事を追加して」
 AI:       blog_list → blog_id を確認
+          → entry_preview(blog_id, title="テスト記事", body=...) で見た目確認（公開ファイルは書かない）
           → entry_create(blog_id, title="テスト記事", status="draft")
 
 ユーザー: 「会社概要ページを作って About フォルダに入れて公開して」
@@ -535,7 +537,7 @@ plugins/MTMCP/
         │   └── Authorize.pm  # OAuth 認可エンドポイント（consent画面）
         └── Tools/
             ├── Blog.pm         # blog_list
-            ├── Entry.pm        # entry_list / get / create / update / delete
+            ├── Entry.pm        # entry_list / get / create / update / delete / preview
             ├── Page.pm         # page_list / get / create / update / delete / preview
             ├── Folder.pm       # folder_list / get / create / update / delete
             ├── Category.pm     # category_list / get / create / update / delete / permutate

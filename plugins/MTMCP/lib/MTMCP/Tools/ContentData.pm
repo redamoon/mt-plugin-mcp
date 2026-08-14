@@ -5,11 +5,6 @@ use warnings;
 use constant RELEASE => 2;
 use constant HOLD    => 1;
 
-# キーワード検索時にPerl側でスキャンする最大件数。DB側でのLIKE検索ではなく
-# 直近のレコードをこの件数までロードしてから絞り込むため、これを超えて
-# 古いレコードにしかマッチしないキーワードは検出できない（既知の制約）。
-use constant KEYWORD_SCAN_LIMIT => 2000;
-
 sub list {
     my ($app, $args) = @_;
     my $ct_id   = $args->{content_type_id} or die "content_type_id is required\n";
@@ -20,6 +15,7 @@ sub list {
 
     require MT::ContentData;
     require MTMCP::Perm;
+    require MTMCP::Search;
     my $check_blog_id = $args->{blog_id};
     unless ($check_blog_id) {
         require MT::ContentType;
@@ -33,24 +29,20 @@ sub list {
     $terms{status}  = RELEASE() if $status eq 'publish';
     $terms{status}  = HOLD()    if $status eq 'draft';
 
-    my %load_opts = ( sort => 'authored_on', direction => 'descend' );
-    if ($keyword) {
-        $load_opts{limit} = KEYWORD_SCAN_LIMIT;
-    } else {
-        $load_opts{limit}  = $limit;
-        $load_opts{offset} = $offset;
+    my %load_opts = (
+        sort      => 'authored_on',
+        direction => 'descend',
+        limit     => $limit,
+        offset    => $offset,
+    );
+    my $load_terms = \%terms;
+    if (defined $keyword && $keyword =~ /\S/) {
+        my ($t, $extra) = MTMCP::Search::content_data_like_args(\%terms, $keyword);
+        $load_terms = $t;
+        %load_opts  = (%load_opts, %$extra) if $extra;
     }
 
-    my @cds = MT::ContentData->load(\%terms, \%load_opts);
-
-    if ($keyword) {
-        my $kw = lc $keyword;
-        @cds = grep {
-            my $data = $_->data // {};
-            grep { defined $_ && index(lc("$_"), $kw) >= 0 } values %$data;
-        } @cds;
-        @cds = splice(@cds, $offset, $limit);
-    }
+    my @cds = MT::ContentData->load($load_terms, \%load_opts);
 
     return [ map { _to_hash($_) } @cds ];
 }

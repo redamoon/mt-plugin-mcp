@@ -3,6 +3,7 @@ use strict;
 use warnings;
 use MT::Asset;
 use MTMCP::Perm;
+use MTMCP::Search;
 
 my %IMAGE_EXT = map { $_ => 1 } qw(jpg jpeg png gif bmp webp);
 
@@ -18,11 +19,6 @@ my %ALLOWED_UPLOAD_EXT = map { $_ => 1 } (
        mp3 mp4 mov avi wav ogg webm),
 );
 
-# キーワード検索時にPerl側でスキャンする最大件数。DB側でのLIKE検索ではなく
-# 直近のレコードをこの件数までロードしてから絞り込むため、これを超えて
-# 古いレコードにしかマッチしないキーワードは検出できない（既知の制約）。
-use constant KEYWORD_SCAN_LIMIT => 2000;
-
 # Base64デコード後のアップロードサイズ上限（20MB）。上限を設けないと
 # 大きなペイロードでメモリ・ディスクを消費させられる。
 use constant MAX_UPLOAD_BYTES => 20 * 1024 * 1024;
@@ -37,24 +33,14 @@ sub list {
     my %terms = (blog_id => $blog_id);
     $terms{class} = $args->{class} if $args->{class};
 
-    my %load_opts = ( sort => 'created_on', direction => 'descend' );
-    if ($keyword) {
-        $load_opts{limit} = KEYWORD_SCAN_LIMIT;
-    } else {
-        $load_opts{limit}  = $limit;
-        $load_opts{offset} = $offset;
-    }
-
-    my @assets = MT::Asset->load(\%terms, \%load_opts);
-
-    if ($keyword) {
-        my $kw = lc $keyword;
-        @assets = grep {
-            index(lc($_->label // ''), $kw) >= 0
-                || index(lc($_->file_name // ''), $kw) >= 0
-        } @assets;
-        @assets = splice(@assets, $offset, $limit);
-    }
+    my %load_opts = (
+        sort      => 'created_on',
+        direction => 'descend',
+        limit     => $limit,
+        offset    => $offset,
+    );
+    my $load_terms = MTMCP::Search::and_like_or(\%terms, $keyword, 'label', 'file_name');
+    my @assets = MT::Asset->load($load_terms, \%load_opts);
 
     return [ map { _to_hash($_) } @assets ];
 }

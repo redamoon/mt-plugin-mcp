@@ -5,6 +5,7 @@ use utf8;
 use JSON;
 use MT::Template;
 use MTMCP::Perm;
+use MTMCP::Search;
 
 # テンプレート本文をレンダリングして返すときの上限（文字数）。
 # AI クライアントのコンテキストを溢れさせないためのガード。
@@ -21,20 +22,17 @@ sub list {
     my $keyword = $args->{keyword};
     my %terms = (blog_id => $blog_id);
     $terms{type} = $args->{type} if $args->{type};
-    my @tmpls = MT::Template->load(\%terms, { sort => 'name', direction => 'ascend' });
 
-    if ($keyword) {
-        my $kw = lc $keyword;
-        @tmpls = grep { index(lc($_->name // ''), $kw) >= 0 } @tmpls;
-    }
+    my %load_opts = ( sort => 'name', direction => 'ascend' );
     if (defined(my $offset = $args->{offset})) {
-        $offset = 0 if $offset < 0;
-        @tmpls = $offset < @tmpls ? splice(@tmpls, $offset) : ();
+        $load_opts{offset} = $offset < 0 ? 0 : $offset;
     }
     if (defined(my $limit = $args->{limit})) {
-        $limit = 0 if $limit < 0;
-        @tmpls = splice(@tmpls, 0, $limit);
+        $load_opts{limit} = $limit < 0 ? 0 : $limit;
     }
+
+    my $load_terms = MTMCP::Search::and_like_or(\%terms, $keyword, 'name');
+    my @tmpls = MT::Template->load($load_terms, \%load_opts);
 
     return [ map { _to_hash($_) } @tmpls ];
 }
