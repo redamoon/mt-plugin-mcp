@@ -8,12 +8,24 @@ our %STORE;
 our $NEXT_ID = 1;
 our @SAVED;
 our @REMOVED;
+our $LAST_LOAD_TERMS;
+our $LAST_LOAD_ARGS;
+our $BUILD_COUNT = 0;
+our $LAST_BUILD_CTX;
+our $WRITE_COUNT = 0;
+our $PUT_DATA_COUNT = 0;
 
 sub reset {
-    %STORE    = ();
-    $NEXT_ID  = 1;
-    @SAVED    = ();
-    @REMOVED  = ();
+    %STORE           = ();
+    $NEXT_ID         = 1;
+    @SAVED           = ();
+    @REMOVED         = ();
+    $LAST_LOAD_TERMS  = undef;
+    $LAST_LOAD_ARGS   = undef;
+    $BUILD_COUNT      = 0;
+    $LAST_BUILD_CTX   = undef;
+    $WRITE_COUNT      = 0;
+    $PUT_DATA_COUNT   = 0;
 }
 
 sub new {
@@ -35,12 +47,31 @@ sub new {
 
 sub load {
     my ($class, $terms, $args) = @_;
+    $LAST_LOAD_TERMS = $terms;
+    $LAST_LOAD_ARGS  = $args;
     my @objs = values %STORE;
 
     if (!defined $terms) {
     }
     elsif (!ref $terms) {
         @objs = grep { defined $_->id && $_->id == $terms } @objs;
+    }
+    elsif (ref $terms eq 'ARRAY') {
+        my ($base) = grep { ref $_ eq 'HASH' } @$terms;
+        if ($base) {
+            if (exists $base->{id}) {
+                @objs = grep { defined $_->id && $_->id == $base->{id} } @objs;
+            }
+            if (exists $base->{blog_id}) {
+                @objs = grep { defined $_->blog_id && $_->blog_id == $base->{blog_id} } @objs;
+            }
+            if (exists $base->{type}) {
+                @objs = grep { ($_->type // '') eq $base->{type} } @objs;
+            }
+            if (exists $base->{name} && !ref $base->{name}) {
+                @objs = grep { ($_->name // '') eq $base->{name} } @objs;
+            }
+        }
     }
     elsif (ref $terms eq 'HASH') {
         if (exists $terms->{id}) {
@@ -113,9 +144,21 @@ sub context {
 
 sub build {
     my ($self, $ctx) = @_;
+    $BUILD_COUNT++;
+    $LAST_BUILD_CTX = $ctx;
     my $entry = $ctx && $ctx->stash('entry');
     my $title = $entry ? ($entry->title // '') : '';
     return ($self->text // '') . $title;
+}
+
+sub write {
+    $WRITE_COUNT++;
+    die "MT::Template::write must not be called during preview\n";
+}
+
+sub put_data {
+    $PUT_DATA_COUNT++;
+    die "put_data must not be called during preview\n";
 }
 
 sub errstr { 'stub error' }
@@ -136,11 +179,16 @@ for my $field (
 }
 
 package MT::Template::_Context;
-sub new { bless { stash => {} }, shift }
+sub new { bless { stash => {}, vars => {} }, shift }
 sub stash {
     my ($self, $key, $val) = @_;
     $self->{stash}{$key} = $val if @_ > 2;
     return $self->{stash}{$key};
+}
+sub var {
+    my ($self, $key, $val) = @_;
+    $self->{vars}{$key} = $val if @_ > 2;
+    return $self->{vars}{$key};
 }
 
 1;

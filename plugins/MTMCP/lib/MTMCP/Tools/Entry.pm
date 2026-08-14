@@ -1,14 +1,14 @@
 package MTMCP::Tools::Entry;
 use strict;
 use warnings;
+use utf8;
+use JSON;
 use MT::Entry;
 use MT::Placement;
 use MTMCP::Perm;
+use MTMCP::Search;
 
-# キーワード検索時にPerl側でスキャンする最大件数。DB側でのLIKE検索ではなく
-# 直近のレコードをこの件数までロードしてから絞り込むため、これを超えて
-# 古いレコードにしかマッチしないキーワードは検出できない（既知の制約）。
-use constant KEYWORD_SCAN_LIMIT => 2000;
+use constant PREVIEW_MAX_CHARS => 100_000;
 
 sub list {
     my ($app, $args) = @_;
@@ -22,24 +22,14 @@ sub list {
     $terms{status} = MT::Entry::RELEASE() if $status eq 'publish';
     $terms{status} = MT::Entry::HOLD()    if $status eq 'draft';
 
-    my %load_opts = ( sort => 'authored_on', direction => 'descend' );
-    if ($keyword) {
-        $load_opts{limit} = KEYWORD_SCAN_LIMIT;
-    } else {
-        $load_opts{limit}  = $limit;
-        $load_opts{offset} = $offset;
-    }
-
-    my @entries = MT::Entry->load(\%terms, \%load_opts);
-
-    if ($keyword) {
-        my $kw = lc $keyword;
-        @entries = grep {
-            index(lc($_->title // ''), $kw) >= 0
-                || index(lc($_->text // ''), $kw) >= 0
-        } @entries;
-        @entries = splice(@entries, $offset, $limit);
-    }
+    my %load_opts = (
+        sort      => 'authored_on',
+        direction => 'descend',
+        limit     => $limit,
+        offset    => $offset,
+    );
+    my $load_terms = MTMCP::Search::and_like_or(\%terms, $keyword, 'title', 'text');
+    my @entries = MT::Entry->load($load_terms, \%load_opts);
 
     return [ map { _to_hash($_) } @entries ];
 }
@@ -102,6 +92,136 @@ sub update {
     }
     $entry->save or die $entry->errstr . "\n";
     return { entry_id => $entry->id, status => 'updated', title => $entry->title };
+}
+
+# Individual アーカイブをメモリ上でビルドする。公開ファイルは書かない。
+# MT::CMS::Entry::_build_entry_preview / Data API _preview_common / rebuild_entry は使わない。
+sub preview {
+    my ($app, $args) = @_;
+    my $blog_id = $args->{blog_id} or die "blog_id is required\n";
+    MTMCP::Perm::require_blog_permission($app, $blog_id, 'create_post', '記事の作成');
+
+    my $entry_id   = $args->{entry_id};
+    my $has_fields = defined $args->{body} || defined $args->{title};
+    die "entry_id または body / title が必要です\n"
+        unless $entry_id || $has_fields;
+
+    require MT::Blog;
+    my $blog = MT::Blog->load($blog_id) or die "Blog not found: $blog_id\n";
+
+    my $entry;
+    if ($entry_id) {
+        $entry = _load_entry($entry_id) or die "Entry not found: $entry_id\n";
+        die "entry_id (blog_id: " . $entry->blog_id . ") と blog_id ($blog_id) が一致しません\n"
+            unless $entry->blog_id == $blog_id;
+        my $preview = eval { $entry->clone };
+        $preview = bless { %$entry }, ref($entry) unless $preview;
+        $preview->title($args->{title})       if defined $args->{title};
+        $preview->text($args->{body})         if defined $args->{body};
+        $preview->text_more($args->{more})    if defined $args->{more};
+        $preview->excerpt($args->{excerpt})   if defined $args->{excerpt};
+        $preview->convert_breaks($args->{convert_breaks}) if defined $args->{convert_breaks};
+        if (defined $args->{status}) {
+            $preview->status($args->{status} eq 'publish' ? MT::Entry::RELEASE() : MT::Entry::HOLD());
+        }
+        $entry = $preview;
+    }
+    else {
+        $entry = MT::Entry->new;
+        $entry->id(-1);
+        $entry->blog_id($blog_id);
+        $entry->title($args->{title} // '');
+        $entry->text($args->{body} // '');
+        $entry->text_more($args->{more})  if defined $args->{more};
+        $entry->excerpt($args->{excerpt}) if defined $args->{excerpt};
+        $entry->convert_breaks(
+            defined $args->{convert_breaks} ? $args->{convert_breaks} : $blog->convert_paras
+        );
+        if (defined $args->{status}) {
+            $entry->status($args->{status} eq 'publish' ? MT::Entry::RELEASE() : MT::Entry::HOLD());
+        }
+        else {
+            $entry->status(MT::Entry::HOLD());
+        }
+        my ( $sec, $min, $hour, $day, $mon, $year ) = localtime;
+        $entry->authored_on(
+            sprintf(
+                '%04d%02d%02d%02d%02d%02d',
+                $year + 1900, $mon + 1, $day, $hour, $min, $sec
+            )
+        );
+    }
+
+    _stash_preview_categories($entry, $args->{category_ids}) if $args->{category_ids};
+
+    require MT::TemplateMap;
+    my $map = MT::TemplateMap->load({
+        archive_type => 'Individual',
+        is_preferred => 1,
+        blog_id      => $blog_id,
+    }) or die "記事アーカイブテンプレートが見つかりません\n";
+
+    require MT::Template;
+    my $tmpl = MT::Template->load($map->template_id)
+        or die "記事アーカイブテンプレートが見つかりません\n";
+
+    my $ctx = $tmpl->context;
+    $ctx->stash('blog',                 $blog);
+    $ctx->stash('entry',                $entry);
+    $ctx->stash('current_archive_type', 'Individual');
+    $ctx->stash('current_timestamp',    $entry->authored_on);
+    $ctx->stash('preview_template',     1);
+
+    eval {
+        my $pub = ( $blog->can('publisher') ) ? $blog->publisher : undef;
+        return unless $pub && $pub->can('archiver');
+        my $archiver = $pub->archiver('Individual');
+        return unless $archiver && $archiver->can('template_params');
+        my $vars = {};
+        $archiver->template_params($vars);
+        if ( $ctx->can('var') ) {
+            $ctx->var( $_, $vars->{$_} ) for keys %$vars;
+        }
+        1;
+    };
+
+    my $output = $tmpl->build($ctx);
+    unless (defined $output) {
+        my $err = $tmpl->errstr // 'unknown error';
+        die "テンプレートのビルドに失敗しました: $err\n";
+    }
+
+    my $truncated = 0;
+    if (length($output) > PREVIEW_MAX_CHARS) {
+        $output    = substr($output, 0, PREVIEW_MAX_CHARS);
+        $truncated = 1;
+    }
+
+    my $id = $entry->id;
+    return {
+        output    => $output,
+        length    => length($output),
+        truncated => $truncated ? JSON::true : JSON::false,
+        type      => 'individual',
+        entry_id  => ( defined $id && $id > 0 ) ? $id : undef,
+        saved     => JSON::false,
+    };
+}
+
+sub _stash_preview_categories {
+    my ( $entry, $cat_ids ) = @_;
+    return unless $cat_ids && ref $cat_ids eq 'ARRAY' && @$cat_ids;
+    require MT::Category;
+    my @cats;
+    for my $cid (@$cat_ids) {
+        my $cat = MT::Category->load( { id => $cid, class => 'category' } );
+        $cat ||= MT::Category->load($cid);
+        push @cats, $cat if $cat;
+    }
+    return unless @cats;
+    return unless $entry->can('cache_property');
+    $entry->cache_property( 'category',   undef, $cats[0] );
+    $entry->cache_property( 'categories', undef, \@cats );
 }
 
 sub _to_hash {

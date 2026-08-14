@@ -1,18 +1,10 @@
-package MT::Entry;
+package MT::Asset;
 use strict;
 use warnings;
-
-# MTMCP::Tools::Entry の単体テスト用スタブ。
-# 実 MT コアは本リポジトリに含まれないため、class フィルタの有無だけを再現する。
-# スカラー load / { id => $id } は class を見ない（MT::Object::lookup と同じ）。
-
-use constant HOLD    => 1;
-use constant RELEASE => 2;
 
 our %STORE;
 our $NEXT_ID = 1;
 our @SAVED;
-our $LAST_SAVE;
 our @REMOVED;
 our $LAST_LOAD_TERMS;
 our $LAST_LOAD_ARGS;
@@ -21,7 +13,6 @@ sub reset {
     %STORE           = ();
     $NEXT_ID         = 1;
     @SAVED           = ();
-    $LAST_SAVE       = undef;
     @REMOVED         = ();
     $LAST_LOAD_TERMS = undef;
     $LAST_LOAD_ARGS  = undef;
@@ -30,58 +21,41 @@ sub reset {
 sub new {
     my $class = shift;
     bless {
-        id          => undef,
-        blog_id     => undef,
-        title       => undef,
-        text        => undef,
-        text_more   => undef,
-        excerpt     => undef,
-        status      => HOLD(),
-        author_id   => undef,
-        authored_on    => undef,
-        modified_on    => undef,
-        basename       => undef,
-        convert_breaks => undef,
-        class          => 'entry',
+        id         => undef,
+        blog_id    => undef,
+        label      => undef,
+        file_name  => undef,
+        class      => 'file',
+        created_on => undef,
+        file_path  => undef,
+        mime_type  => undef,
+        file_size  => undef,
+        url        => '',
     }, $class;
-}
-
-sub exist {
-    my $class = shift;
-    return $class->load(@_) ? 1 : 0;
 }
 
 sub load {
     my ($class, $terms, $args) = @_;
     $LAST_LOAD_TERMS = $terms;
     $LAST_LOAD_ARGS  = $args;
-
     my @objs = values %STORE;
 
     if (!defined $terms) {
-        # fall through
     }
     elsif (!ref $terms) {
-        # スカラー引数 = lookup。class フィルタなし。
         @objs = grep { defined $_->id && $_->id == $terms } @objs;
     }
     elsif (ref $terms eq 'ARRAY') {
-        # nested -and/-or terms。単体テストは terms の記録だけで足りる。
-        # クラッシュせず HASH 相当の base 条件だけ適用する。
         my ($base) = grep { ref $_ eq 'HASH' } @$terms;
         if ($base) {
             if (exists $base->{id}) {
                 @objs = grep { defined $_->id && $_->id == $base->{id} } @objs;
             }
-            if (exists $base->{class}) {
-                my $want = $base->{class};
-                @objs = grep { ($_->class // '') eq $want } @objs;
-            }
             if (exists $base->{blog_id}) {
                 @objs = grep { defined $_->blog_id && $_->blog_id == $base->{blog_id} } @objs;
             }
-            if (exists $base->{status}) {
-                @objs = grep { defined $_->status && $_->status == $base->{status} } @objs;
+            if (exists $base->{class}) {
+                @objs = grep { ($_->class // '') eq $base->{class} } @objs;
             }
         }
     }
@@ -89,18 +63,11 @@ sub load {
         if (exists $terms->{id}) {
             @objs = grep { defined $_->id && $_->id == $terms->{id} } @objs;
         }
-        if (exists $terms->{class}) {
-            my $want = $terms->{class};
-            @objs = grep { ($_->class // '') eq $want } @objs;
-        }
         if (exists $terms->{blog_id}) {
             @objs = grep { defined $_->blog_id && $_->blog_id == $terms->{blog_id} } @objs;
         }
-        if (exists $terms->{status}) {
-            @objs = grep { defined $_->status && $_->status == $terms->{status} } @objs;
-        }
-        if (exists $terms->{basename}) {
-            @objs = grep { ($_->basename // '') eq ($terms->{basename} // '') } @objs;
+        if (exists $terms->{class}) {
+            @objs = grep { ($_->class // '') eq $terms->{class} } @objs;
         }
     }
 
@@ -124,26 +91,9 @@ sub load {
 sub save {
     my $self = shift;
     $self->{id} = $NEXT_ID++ unless defined $self->{id};
-    $self->{class} = 'entry' unless defined $self->{class};
     $STORE{ $self->{id} } = $self;
-    $LAST_SAVE = $self;
     push @SAVED, $self;
     return 1;
-}
-
-sub clone {
-    my $self = shift;
-    my $copy = bless { %$self }, ref($self);
-    return $copy;
-}
-
-sub cache_property {
-    my ( $self, $key, $code, $val ) = @_;
-    if ( @_ >= 4 ) {
-        $self->{"_cache_$key"} = $val;
-        return $val;
-    }
-    return $self->{"_cache_$key"};
 }
 
 sub remove {
@@ -153,11 +103,11 @@ sub remove {
     return 1;
 }
 
-sub errstr    { 'stub error' }
-sub permalink { '' }
+sub errstr { 'stub error' }
+sub url    { $_[0]->{url} }
 
 for my $field (
-    qw(id blog_id title text text_more excerpt status author_id authored_on modified_on basename convert_breaks class)
+    qw(id blog_id label file_name class created_on file_path mime_type file_size)
     )
 {
     no strict 'refs';
