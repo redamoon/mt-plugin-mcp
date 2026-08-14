@@ -9,6 +9,7 @@ use MTMCP::Perm;
 use MTMCP::Search;
 
 use constant PREVIEW_MAX_CHARS => 100_000;
+use constant EXPORT_MAX_CHARS  => 100_000;
 
 sub list {
     my ($app, $args) = @_;
@@ -229,6 +230,91 @@ sub preview {
         entry_id  => ( defined $id && $id > 0 ) ? $id : undef,
         saved     => JSON::false,
     };
+}
+
+sub export {
+    my ($app, $args) = @_;
+    my $entry_id = $args->{entry_id} or die "entry_id is required\n";
+    my $entry = _load_entry($entry_id) or die "Entry not found: $entry_id\n";
+    my $blog_id = $entry->blog_id;
+    if (defined $args->{blog_id} && $args->{blog_id} ne '' && $args->{blog_id} != $blog_id) {
+        die "Entry not found: $entry_id\n";
+    }
+    MTMCP::Perm::require_blog_permission($app, $blog_id, 'export_blog', 'ブログのエクスポート');
+
+    my $body = _to_mt_export($entry);
+    my $truncated = 0;
+    if (length($body) > EXPORT_MAX_CHARS) {
+        $body      = substr($body, 0, EXPORT_MAX_CHARS);
+        $truncated = 1;
+    }
+    return {
+        entry_id  => $entry->id,
+        blog_id   => $blog_id,
+        format    => 'mt',
+        body      => $body,
+        length    => length($body),
+        truncated => $truncated ? JSON::true : JSON::false,
+    };
+}
+
+sub _to_mt_export {
+    my ($entry) = @_;
+    my $author_name = 'author';
+    if (my $aid = $entry->author_id) {
+        require MT::Author;
+        my $author = eval { MT::Author->load($aid) };
+        $author_name = $author->name if $author && defined $author->name && $author->name ne '';
+    }
+
+    my $status = ($entry->status == MT::Entry::RELEASE()) ? 'Publish' : 'Draft';
+    my @lines  = (
+        "AUTHOR: $author_name",
+        'TITLE: ' . ($entry->title // ''),
+        'BASENAME: ' . ($entry->basename // ''),
+        "STATUS: $status",
+        'DATE: ' . _export_date($entry->authored_on),
+    );
+
+    my @placements = eval { MT::Placement->load({ entry_id => $entry->id }) };
+    if (@placements) {
+        require MT::Category;
+        my $primary_done = 0;
+        for my $p (@placements) {
+            my $cat = MT::Category->load($p->category_id) or next;
+            my $class = eval { $cat->class } // 'category';
+            next if $class eq 'folder';
+            my $label = $cat->label // '';
+            if (!$primary_done && eval { $p->is_primary }) {
+                push @lines, "PRIMARY CATEGORY: $label";
+                $primary_done = 1;
+            }
+            push @lines, "CATEGORY: $label";
+        }
+    }
+
+    push @lines, '-----', 'BODY:', ($entry->text // ''), '-----';
+    if (defined $entry->text_more && $entry->text_more ne '') {
+        push @lines, 'EXTENDED BODY:', $entry->text_more, '-----';
+    }
+    if (defined $entry->excerpt && $entry->excerpt ne '') {
+        push @lines, 'EXCERPT:', $entry->excerpt, '-----';
+    }
+    push @lines, '--------';
+    return join("\n", @lines) . "\n";
+}
+
+sub _export_date {
+    my ($ts) = @_;
+    return '' unless defined $ts && $ts ne '';
+    if ($ts =~ /\A(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\z/) {
+        my ($y, $m, $d, $H, $M, $S) = ($1, $2, $3, $4, $5, $6);
+        my $ampm = $H >= 12 ? 'PM' : 'AM';
+        my $h12  = $H % 12;
+        $h12 = 12 if $h12 == 0;
+        return sprintf('%02d/%02d/%04d %02d:%02d:%02d %s', $m, $d, $y, $h12, $M, $S, $ampm);
+    }
+    return $ts;
 }
 
 sub _stash_preview_categories {
