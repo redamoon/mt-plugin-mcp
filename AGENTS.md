@@ -1,6 +1,6 @@
 # エージェント / コントリビューター向けメモ
 
-このリポジトリは Movable Type 9 用の MCP サーバープラグインです。ユーザー向けの導入・ツール説明は [README.md](README.md) と [docs/tools.md](docs/tools.md) を見てください。本ファイルは **どこを触るか・テストの回し方・やってはいけないこと** です。
+このリポジトリは Movable Type 9 用の MCP サーバープラグインです。ユーザー向けの導入は [docs/getting-started.md](docs/getting-started.md) と [README.md](README.md)、ツール説明は [docs/tools.md](docs/tools.md) です。人間の開発者がプラグインを直す手順は [docs/developer-onboarding.md](docs/developer-onboarding.md) です。本ファイルはエージェント向けの **どこを触るか・テストの回し方・やってはいけないこと** であり、人間向けオンボーディングの代替ではありません。
 
 ロードマップの実装範囲は [#26](https://github.com/redamoon/mt-plugin-mcp/issues/26) の P1/P2 までです。検討中の P3 と後続は [#44](https://github.com/redamoon/mt-plugin-mcp/issues/44) です。
 
@@ -22,7 +22,7 @@ plugins/MTMCP/                 # プラグイン本体（MT の plugins/ へコ�
   tmpl/                        # CMS テンプレート
 t/*.t                          # ユニットテスト
 t/lib/                         # MT 本体のスタブ（実 MT は不要）
-docs/                          # ユーザー向け（tools.md / architecture-auth.md）
+docs/                          # ユーザー向け（getting-started / guides / developer-onboarding / tools / architecture-auth）
 tools/claude-desktop-bridge/   # Claude Desktop 用 stdio↔HTTP ブリッジ
 ```
 
