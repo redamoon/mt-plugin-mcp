@@ -45,7 +45,9 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `rebuild_content_data` | コンテンツデータ1件を再構築 |
 | `rebuild_site` | ブログ全体を再構築（`archive_type` で範囲を絞り込み可） |
 
-> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` は **「テンプレートの編集」権限**（`edit_templates`）を必要とします（v0.6.0 で追加。従来はブログへのアクセス権限だけで実行できました）。
+> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` は **「テンプレートの編集」権限**（`edit_templates`）を必要とします（v0.6.0 で追加。`create` / `update` / `delete` は従来ブログへのアクセス権限だけで実行できました）。
+>
+> `template_preview` は任意の本文を MT テンプレートとして評価するため、保存と同等の権限を要求しています。`AllowFileInclude` を有効にしている環境では `<mt:Include file="...">` でサーバー上のファイルを読み出せてしまうためです。構文チェックのみで評価を伴わない `template_validate` はブログへのアクセス権限で実行できます。
 
 ### コンテンツタイプ・コンテンツデータ（MT7以降）
 
@@ -525,7 +527,7 @@ tools/
 | アップロードで `File extension not allowed` | 許可されていない拡張子（実行可能ファイルや`.svg`など）を指定した | 許可拡張子（README「asset_uploadの注意点」参照）に変換してからアップロード |
 | Claude Desktopで「有効なMCPサーバー設定ではないため、スキップされました」 | `claude_desktop_config.json` は `type`/`url`/`headers` によるリモートサーバー定義をサポートしていない | アプリのコネクタ設定UIから追加するか、HTTPS未対応のローカル環境なら `tools/claude-desktop-bridge/` のブリッジスクリプトを使う |
 | `テンプレート構文にエラーがあります`（テンプレート保存時） | 本文に閉じ忘れや存在しないタグがある | エラーの行番号を見て修正する。`template_tag_list` で正しいタグ名を確認できる。意図的に保存する場合のみ `skip_validation: true` |
-| `「テンプレートの編集」の権限がありません` | トークンのユーザーに `edit_templates` 権限が無い | MT 側でテンプレート編集権限を持つロールを付与するか、権限のあるユーザーでトークンを再発行 |
+| `「テンプレートの編集」の権限がありません` | トークンのユーザーに `edit_templates` 権限が無い（`template_create` / `update` / `delete` / `preview` で必要） | MT 側でテンプレート編集権限を持つロールを付与するか、権限のあるユーザーでトークンを再発行 |
 | `「サイトの再構築」の権限がありません` | トークンのユーザーに `rebuild` 権限が無い | MT 側で「サイトの再構築」権限を付与するか、権限のあるユーザーでトークンを再発行 |
 | `rebuild_site` が応答しない・504 になる | 記事数が多くWebサーバーのタイムアウトを超えた | `rebuild_template` / `rebuild_entry` で範囲を絞る、`archive_type` を指定して分割実行する、またはMT管理画面から再構築する |
 | `このテンプレート（type: ...）は単体で再構築できません` | ウィジェットやモジュールなど、単体では出力先を持たないテンプレートを指定した | それを読み込んでいるインデックス/アーカイブテンプレートを `rebuild_template` するか、`rebuild_site` を使う |

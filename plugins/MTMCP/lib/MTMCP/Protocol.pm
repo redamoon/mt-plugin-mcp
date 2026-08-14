@@ -347,7 +347,8 @@ sub _tool_definitions {
             name        => 'template_preview',
             description => 'テンプレートを実際にビルドして出力HTMLを返す（ファイルは書き出さないので公開内容に影響しない）。'
                 . 'body を渡せば未保存の本文を、template_id を渡せば保存済みテンプレートをプレビューできる。'
-                . '記事コンテキストが必要なテンプレート（individual など）は entry_id も渡すこと。出力は10万文字で打ち切られる。',
+                . '記事コンテキストが必要なテンプレート（individual など）は entry_id も渡すこと。出力は10万文字で打ち切られる。'
+                . '本文を評価するため「テンプレートの編集」権限が必要（構文チェックだけなら template_validate を使うこと）。',
             inputSchema => {
                 type     => 'object',
                 required => ['blog_id'],
