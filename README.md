@@ -5,6 +5,8 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 
 対応ツールの一覧・権限・操作の注意は [docs/tools.md](docs/tools.md) を参照してください。認証の流れは [docs/architecture-auth.md](docs/architecture-auth.md) です。
 
+**はじめて接続する方**は [docs/getting-started.md](docs/getting-started.md) を先に読んでください（プラグイン配置 → Apache → トークン → Cursor までの推奨ルート1本です）。使い方の実例は [利用ガイド](docs/guides.md) です。プラグインを直す人は [開発者オンボーディング](docs/developer-onboarding.md) です。エージェント向けの注意は [AGENTS.md](AGENTS.md) です。
+
 ## 動作環境
 
 - Movable Type 9（コンテンツタイプ機能は MT7 以降）
@@ -360,6 +362,8 @@ tools/
 
 ## 開発
 
+人間向けの手順（配置、`prove`、`Protocol.pm` へのツール登録、`/v4/mcp` の叩き方）は [docs/developer-onboarding.md](docs/developer-onboarding.md) です。エージェント向けの制約は [AGENTS.md](AGENTS.md) です。
+
 プラグイン本体は `plugins/MTMCP/` です。MT の `plugins/` にコピー（またはシンボリックリンク）して有効化します。
 
 ユニットテストは MT 本体を必要とせず、`t/lib` のスタブを使います。
@@ -376,7 +380,11 @@ prove -I plugins/MTMCP/lib -I t/lib t/folder.t t/page.t
 
 ## 関連
 
+- はじめての接続: [docs/getting-started.md](docs/getting-started.md)
+- 利用ガイド: [docs/guides.md](docs/guides.md)
+- 開発者オンボーディング: [docs/developer-onboarding.md](docs/developer-onboarding.md)
 - 実装ロードマップ: [#26](https://github.com/redamoon/mt-plugin-mcp/issues/26)
 - ドキュメント追従: [#41](https://github.com/redamoon/mt-plugin-mcp/issues/41)
+- オンボーディング資料: [#22](https://github.com/redamoon/mt-plugin-mcp/issues/22)
 - 課題一覧: [Issues](https://github.com/redamoon/mt-plugin-mcp/issues)
 
