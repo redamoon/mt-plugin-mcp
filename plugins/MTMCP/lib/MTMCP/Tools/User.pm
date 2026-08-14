@@ -155,6 +155,57 @@ sub unlock {
     };
 }
 
+sub update {
+    my ($app, $args) = @_;
+    MTMCP::Perm::require_manage_users($app);
+    my $user_id = $args->{user_id} or die "user_id is required\n";
+    die "password must not be passed; use user_recover_password instead\n"
+        if exists $args->{password} || exists $args->{new_password};
+    die "login name cannot be changed via user_update\n"
+        if exists $args->{name};
+    die "permissions cannot be granted or revoked via user_update\n"
+        if exists $args->{system_permissions}
+        || exists $args->{permissions}
+        || exists $args->{roles}
+        || exists $args->{role_id};
+
+    my $user = _load_author($user_id) or die "User not found: $user_id\n";
+
+    my $has_field = 0;
+    if (exists $args->{display_name}) {
+        my $dn = $args->{display_name};
+        die "display_name is required\n" if !defined $dn || $dn eq '';
+        $user->nickname($dn);
+        $has_field = 1;
+    }
+    if (exists $args->{email}) {
+        my $email = $args->{email};
+        if (defined $email && $email ne '') {
+            require MT::Util;
+            die "Invalid email\n" unless MT::Util::is_valid_email($email);
+        }
+        $user->email($email);
+        $has_field = 1;
+    }
+    if (exists $args->{url}) {
+        $user->url($args->{url});
+        $has_field = 1;
+    }
+    if (exists $args->{status}) {
+        my $status = $args->{status};
+        die "status is required\n" if !defined $status || $status eq '';
+        _status_id($status);    # validate
+        $user->set_status_by_text($status);
+        $has_field = 1;
+    }
+
+    die "no updatable fields given (display_name / email / url / status)\n"
+        unless $has_field;
+
+    $user->save or die $user->errstr . "\n";
+    return _to_hash($user);
+}
+
 sub recover_password {
     my ($app, $args) = @_;
     MTMCP::Perm::require_manage_users($app);

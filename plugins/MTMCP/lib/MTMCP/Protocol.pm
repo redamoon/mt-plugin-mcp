@@ -72,6 +72,7 @@ my %TOOL_HANDLERS = (
     'user_create'          => sub { require MTMCP::Tools::User;         MTMCP::Tools::User::create(@_)            },
     'user_delete'          => sub { require MTMCP::Tools::User;         MTMCP::Tools::User::remove(@_)            },
     'user_unlock'          => sub { require MTMCP::Tools::User;         MTMCP::Tools::User::unlock(@_)            },
+    'user_update'          => sub { require MTMCP::Tools::User;         MTMCP::Tools::User::update(@_)            },
     'user_recover_password'=> sub { require MTMCP::Tools::User;         MTMCP::Tools::User::recover_password(@_)  },
     'rebuild_site'         => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::site(@_)          },
     'rebuild_template'     => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::template(@_)      },
@@ -1209,6 +1210,26 @@ sub _tool_definitions {
                 required => ['user_id'],
                 properties => {
                     user_id => { type => 'integer', description => '削除するユーザーID（user_get で確認）' },
+                },
+            },
+        },
+        {
+            name        => 'user_update',
+            description => 'ユーザーのプロフィール（表示名・メール・URL・状態）を更新する。パスワードの直接変更はしない（user_recover_password を使う）。'
+                . 'ログイン名の変更と権限の付与・剥奪はできない。権限は can_manage_users_groups。返却にパスワードは含まれない。',
+            inputSchema => {
+                type     => 'object',
+                required => ['user_id'],
+                properties => {
+                    user_id      => { type => 'integer', description => 'ユーザーID（user_get で確認）' },
+                    display_name => { type => 'string',  description => '表示名（nickname）' },
+                    email        => { type => 'string',  description => 'メールアドレス' },
+                    url          => { type => 'string',  description => 'ウェブサイトURL' },
+                    status       => {
+                        type        => 'string',
+                        enum        => ['active', 'disabled', 'pending'],
+                        description => '状態',
+                    },
                 },
             },
         },

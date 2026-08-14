@@ -97,11 +97,12 @@ Movable Type 9 用 MCP サーバーが公開するツールの一覧と、権限
 | `user_list` | ユーザー一覧（コメント投稿者は含まない。`keyword` / `status` / `lockout`） |
 | `user_get` | ユーザー1件取得（パスワードは返さない） |
 | `user_create` | ユーザー作成（作成直後はサイト権限なし。ロールは管理画面） |
+| `user_update` | プロフィール更新（表示名・メール・URL・状態。パスワード変更と権限付与はしない） |
 | `user_delete` | ユーザー削除（取り消し不可。自分自身は削除不可） |
 | `user_unlock` | ログイン失敗ロックの解除 |
 | `user_recover_password` | パスワード回復メール送信（新しいパスワードは受け取らない） |
 
-> `user_*` は MT の **「ユーザーとグループの管理」**（`can_manage_users_groups`）が必要です。ブログ編集者トークンではすべて権限エラーになります。サイトへのロール付与・剥奪（grant/revoke）と `user_update` はありません。作成ユーザーに `system_permissions` は付きません。
+> `user_*` は MT の **「ユーザーとグループの管理」**（`can_manage_users_groups`）が必要です。ブログ編集者トークンではすべて権限エラーになります。サイトへのロール付与・剥奪（grant/revoke）はありません。パスワードの直接変更は `user_recover_password` を使います。作成ユーザーに `system_permissions` は付きません。
 >
 > 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` / `templatemap_*` の書き込み / `widgetset_*` の書き込みは **「テンプレートの編集」権限**（`edit_templates`）を必要とします。`page_*` は **「ページの管理」権限**（`manage_pages`）を必要とします。`folder_create` / `folder_update` は `save_folder`、`folder_delete` は `delete_folder`（いずれも `manage_pages` に含まれます）。`entry_preview` は **「記事の作成」権限**（`create_post`）を必要とします。記事カテゴリの `category_create` / `category_update` は `save_category`、`category_delete` は `delete_category`、`category_permutate` は `edit_categories`。セット内カテゴリの作成・更新は `save_catefory_set_category`（MT コアの綴り）、削除と `category_set_*` / セットの `category_permutate` は `manage_category_set`。記事カテゴリの変更は公開ファイルを自動再構築しないため、カテゴリアーカイブを出す場合は `rebuild_site` に `archive_type: Category` を指定する。フォルダ操作は `folder_*`（別ツール）。
 
