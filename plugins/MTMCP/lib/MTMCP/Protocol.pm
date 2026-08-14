@@ -46,6 +46,12 @@ my %TOOL_HANDLERS = (
     'templatemap_create'   => sub { require MTMCP::Tools::TemplateMap;  MTMCP::Tools::TemplateMap::create(@_)    },
     'templatemap_update'   => sub { require MTMCP::Tools::TemplateMap;  MTMCP::Tools::TemplateMap::update(@_)    },
     'templatemap_delete'   => sub { require MTMCP::Tools::TemplateMap;  MTMCP::Tools::TemplateMap::remove(@_)    },
+    'widgetset_list'       => sub { require MTMCP::Tools::Widget;       MTMCP::Tools::Widget::list(@_)           },
+    'widgetset_get'        => sub { require MTMCP::Tools::Widget;       MTMCP::Tools::Widget::get(@_)            },
+    'widgetset_create'     => sub { require MTMCP::Tools::Widget;       MTMCP::Tools::Widget::create(@_)         },
+    'widgetset_update'     => sub { require MTMCP::Tools::Widget;       MTMCP::Tools::Widget::update(@_)         },
+    'widgetset_delete'     => sub { require MTMCP::Tools::Widget;       MTMCP::Tools::Widget::remove(@_)         },
+    'widget_list'          => sub { require MTMCP::Tools::Widget;       MTMCP::Tools::Widget::list_widgets(@_)   },
     'rebuild_site'         => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::site(@_)          },
     'rebuild_template'     => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::template(@_)      },
     'rebuild_entry'        => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::entry(@_)         },
@@ -71,7 +77,7 @@ sub dispatch {
         return _result($id, {
             protocolVersion => $PROTOCOL_VERSION,
             capabilities    => { tools => { listChanged => JSON::false } },
-            serverInfo      => { name => 'MT MCP Server', version => '0.6.0' },
+            serverInfo      => { name => 'MT MCP Server', version => '0.7.0' },
         });
     }
 
@@ -271,7 +277,6 @@ sub _tool_definitions {
                 },
             },
         },
-
         {
             name        => 'category_list',
             description => '指定ブログのカテゴリ一覧を取得する。entry_create でカテゴリを指定する前に呼ぶこと。',
@@ -361,7 +366,6 @@ sub _tool_definitions {
                 },
             },
         },
-
         {
             name        => 'asset_list',
             description => '指定ブログのアセット（画像・ファイルなど）一覧を取得する。',
@@ -447,7 +451,7 @@ sub _tool_definitions {
         },
         {
             name        => 'template_get',
-            description => 'テンプレートIDを指定して本文ごと取得する。アーカイブ系（individual / page / archive など）では maps 配列（テンプレートマップ）も返す。',
+            description => 'テンプレートIDを指定して本文ごと取得する。アーカイブ系（individual / page / archive など）では maps 配列（テンプレートマップ）も返す。ウィジェットセットの割当確認は widgetset_get を使うこと。',
             inputSchema => {
                 type     => 'object',
                 required => ['template_id'],
@@ -464,7 +468,7 @@ sub _tool_definitions {
                 . 'type が index のときは outfile（出力ファイル名）も必ず指定すること。'
                 . 'アーカイブ系（individual / page / archive / category / author / ct / ct_archive）は maps または archive_type を付けないと公開できない。無い場合は warning を返すので templatemap_create を続けること。'
                 . 'type が ct / ct_archive のときは content_type_id が必須。'
-                . 'type が widgetset のときは body を指定できない（指定するとエラー。本文はウィジェット構成から自動生成され、渡した body は保存されない）。'
+                . 'ウィジェットセットの作成・割当は widgetset_* を使うこと。type が widgetset のときは body を指定できない（指定するとエラー。本文はウィジェット構成から自動生成され、渡した body は保存されない）。'
                 . '作成しただけでは公開ファイルは生成されないため、必要に応じて rebuild_template を実行すること。',
             inputSchema => {
                 type     => 'object',
@@ -504,6 +508,7 @@ sub _tool_definitions {
             description => 'テンプレートを更新する。body / name / type / outfile / identifier / build_type / rebuild_me のうち指定した項目のみ上書きされる（最低1つ必要）。'
                 . 'body を指定した場合は保存前に構文を自動検証し、エラーがあれば行番号付きで返して保存を中止する。'
                 . 'type が widgetset のときは body を指定できない（指定するとエラー。本文はウィジェット構成から自動生成され、渡した body は保存されない）。'
+                . 'ウィジェットセットの割当変更は widgetset_update を使うこと。'
                 . '更新後に公開ファイルへ反映するには rebuild_template（または rebuild_site）を実行すること。',
             inputSchema => {
                 type     => 'object',
@@ -648,7 +653,83 @@ sub _tool_definitions {
                 },
             },
         },
-
+        {
+            name        => 'widgetset_list',
+            description => '指定ブログのウィジェットセット一覧。各要素に widgets（id+name、割当順）を含む。個別ウィジェット本文は template_*（type: widget）。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id'],
+                properties => {
+                    blog_id => { type => 'integer' },
+                    keyword => { type => 'string', description => 'セット名の部分一致' },
+                    limit   => { type => 'integer' },
+                    offset  => { type => 'integer' },
+                },
+            },
+        },
+        {
+            name        => 'widgetset_get',
+            description => 'ウィジェットセット1件を取得する。widgets は modulesets 順。本文の編集対象としては返さない。',
+            inputSchema => {
+                type     => 'object',
+                required => ['widgetset_id'],
+                properties => {
+                    widgetset_id => { type => 'integer' },
+                },
+            },
+        },
+        {
+            name        => 'widgetset_create',
+            description => 'ウィジェットセットを作成する。widget_ids は割当順の整数配列。body は指定できない。反映はセットを含むテンプレート側の rebuild_template / rebuild_site。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id', 'name'],
+                properties => {
+                    blog_id    => { type => 'integer' },
+                    name       => { type => 'string' },
+                    widget_ids => { type => 'array', items => { type => 'integer' }, description => 'ウィジェットテンプレートIDの配列（順を保持）。省略時は空セット' },
+                },
+            },
+        },
+        {
+            name        => 'widgetset_update',
+            description => 'ウィジェットセットの名前または割当を更新する。widget_ids は全置換（空配列で全解除）。未指定なら割当は触らない。body は指定できない。',
+            inputSchema => {
+                type     => 'object',
+                required => ['widgetset_id'],
+                properties => {
+                    widgetset_id => { type => 'integer' },
+                    name         => { type => 'string' },
+                    widget_ids   => { type => 'array', items => { type => 'integer' }, description => '全置換。[] で全解除' },
+                },
+            },
+        },
+        {
+            name        => 'widgetset_delete',
+            description => 'ウィジェットセットを削除する。中のウィジェット本体は消えない。',
+            inputSchema => {
+                type     => 'object',
+                required => ['widgetset_id'],
+                properties => {
+                    widgetset_id => { type => 'integer' },
+                },
+            },
+        },
+        {
+            name        => 'widget_list',
+            description => 'ウィジェット（type=widget）一覧。widgetset_id を付けるとそのセットの割当順。無いときはサイトのウィジェット（グローバル blog_id=0 も含む）。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id'],
+                properties => {
+                    blog_id      => { type => 'integer' },
+                    widgetset_id => { type => 'integer', description => '指定時はそのセット内のみ（割当順）' },
+                    keyword      => { type => 'string' },
+                    limit        => { type => 'integer' },
+                    offset       => { type => 'integer' },
+                },
+            },
+        },
         {
             name        => 'content_type_list',
             description => '指定ブログのコンテンツタイプ一覧を取得する。content_data_* 操作の前に呼んで content_type_id を確認すること。',
@@ -802,7 +883,6 @@ sub _tool_definitions {
                 },
             },
         },
-
         {
             name        => 'rebuild_content_data',
             description => 'コンテンツデータ1件を再構築（公開）する。content_data_create / content_data_update のあとに使う。',

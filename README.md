@@ -51,6 +51,12 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `templatemap_create` | テンプレートマップ作成（`rebuild_template` の前提） |
 | `templatemap_update` | テンプレートマップ更新 |
 | `templatemap_delete` | テンプレートマップ削除（静的ファイルは残ることがある） |
+| `widgetset_list` | ウィジェットセット一覧（割当順の widgets 付き） |
+| `widgetset_get` | ウィジェットセット1件取得 |
+| `widgetset_create` | ウィジェットセット作成（`widget_ids` で割当） |
+| `widgetset_update` | ウィジェットセット更新（`widget_ids` は全置換） |
+| `widgetset_delete` | ウィジェットセット削除（ウィジェット本体は残る） |
+| `widget_list` | ウィジェット一覧（`widgetset_id` でセット内・割当順） |
 
 ### 再構築（公開）
 
@@ -62,7 +68,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `rebuild_content_data` | コンテンツデータ1件を再構築 |
 | `rebuild_site` | ブログ全体を再構築（`archive_type` で範囲を絞り込み可） |
 
-> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` / `templatemap_*` の書き込みは **「テンプレートの編集」権限**（`edit_templates`）を必要とします。`page_*` は **「ページの管理」権限**（`manage_pages`）を必要とします。`folder_create` / `folder_update` は `save_folder`、`folder_delete` は `delete_folder`（いずれも `manage_pages` に含まれます）。
+> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` / `templatemap_*` の書き込み / `widgetset_*` の書き込みは **「テンプレートの編集」権限**（`edit_templates`）を必要とします。`page_*` は **「ページの管理」権限**（`manage_pages`）を必要とします。`folder_create` / `folder_update` は `save_folder`、`folder_delete` は `delete_folder`（いずれも `manage_pages` に含まれます）。
 >
 > `template_preview` は任意の本文を MT テンプレートとして評価するため、保存と同等の権限を要求しています。`AllowFileInclude` を有効にしている環境では `<mt:Include file="...">` でサーバー上のファイルを読み出せてしまうためです。構文チェックのみで評価を伴わない `template_validate` はブログへのアクセス権限で実行できます。
 
@@ -79,7 +85,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `content_data_update` | コンテンツデータ更新（部分更新対応） |
 | `content_data_delete` | コンテンツデータ削除 |
 
-> 削除系ツール（`entry_delete` / `page_delete` / `folder_delete` / `asset_delete` / `template_delete` / `templatemap_delete` / `content_data_delete`）は取り消せない操作です。AI が実行する前に対象を一覧・取得系ツールで確認するよう促してください。
+> 削除系ツール（`entry_delete` / `page_delete` / `folder_delete` / `asset_delete` / `template_delete` / `templatemap_delete` / `widgetset_delete` / `content_data_delete`）は取り消せない操作です。AI が実行する前に対象を一覧・取得系ツールで確認するよう促してください。
 
 ### AI の操作フロー
 
@@ -131,6 +137,7 @@ AI:       blog_list          → blog_id を確認
 - **インデックステンプレートには `outfile` が必須です。** MT は出力ファイル名が空のインデックステンプレートを見つけると再構築処理をそこで中断するため、`outfile` の無いテンプレートを1つ作るだけで、そのサイトの `rebuild_site` と `rebuild_entry` がすべて失敗するようになります。これを防ぐため `template_create` / `template_update` が作成時点で弾きます（公開しないテンプレートとして作る場合は `build_type: 0` を指定してください）。
 - **保存しただけでは公開ファイルは更新されません。** 反映するには `rebuild_template` を実行します。
 - **アーカイブテンプレートにはテンプレートマップが必要です。** `template_create` で `archive_type`（または `maps`）を付けるか、続けて `templatemap_create` してください。マップ保存時の自動再構築はしません。
+- **ウィジェットセットの割当は `widgetset_*` です。** `template_update` の `body` ではセットを組めません。
 
 ### 再構築の範囲を絞る
 
@@ -519,6 +526,7 @@ plugins/MTMCP/
             ├── Asset.pm        # asset_list / get / upload / delete / thumbnail
             ├── Template.pm     # template_list / get / create / update / delete / validate / preview / tag_list
             ├── TemplateMap.pm  # templatemap_list / get / create / update / delete
+            ├── Widget.pm       # widgetset_* / widget_list
             ├── Rebuild.pm      # rebuild_template / entry / page / content_data / site
             ├── ContentType.pm  # content_type_list / get / create
             └── ContentData.pm  # content_data_list / get / create / update / delete
