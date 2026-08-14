@@ -146,6 +146,34 @@ sub entry {
     };
 }
 
+sub page {
+    my ($app, $args) = @_;
+    my $page_id = $args->{page_id} or die "page_id is required\n";
+    require MT::Page;
+    my $page = MT::Page->load({ id => $page_id, class => 'page' })
+        or die "Page not found: $page_id\n";
+    _require_rebuild_perm($app, $page->blog_id);
+    my $blog = _load_blog($page->blog_id);
+
+    my $deps = exists $args->{build_dependencies} ? ($args->{build_dependencies} ? 1 : 0) : 1;
+
+    my $started = time;
+    $app->rebuild_entry(
+        Entry             => $page,
+        Blog              => $blog,
+        BuildDependencies => $deps,
+    ) or die _errmsg($app, 'ページの再構築に失敗しました');
+
+    return {
+        page_id            => $page->id,
+        title              => $page->title,
+        status             => 'rebuilt',
+        scope              => 'page',
+        build_dependencies => $deps,
+        elapsed_sec        => time - $started,
+    };
+}
+
 sub content_data {
     my ($app, $args) = @_;
     my $cd_id = $args->{content_data_id} or die "content_data_id is required\n";

@@ -15,6 +15,12 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `entry_create` | 記事作成（デフォルト: 下書き） |
 | `entry_update` | 記事更新 |
 | `entry_delete` | 記事削除 |
+| `page_list` | 固定ページ一覧（`folder_id` で絞り込み可） |
+| `page_get` | 固定ページ1件取得（本文含む） |
+| `page_create` | 固定ページ作成（デフォルト: 下書き。フォルダは `folder_id` 単数） |
+| `page_update` | 固定ページ更新（`folder_id: 0` でフォルダ解除） |
+| `page_delete` | 固定ページ削除 |
+| `page_preview` | 固定ページを Page アーカイブとしてビルド（ファイルは書き出さない） |
 | `category_list` | カテゴリ一覧取得 |
 | `tag_list` | タグ一覧取得 |
 | `folder_list` | フォルダ一覧取得（固定ページ用。記事カテゴリとは別） |
@@ -47,10 +53,11 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 |---|---|
 | `rebuild_template` | テンプレート1枚を再構築 |
 | `rebuild_entry` | 記事1件を再構築（依存アーカイブ・インデックスも既定で再構築） |
+| `rebuild_page` | 固定ページ1件を再構築 |
 | `rebuild_content_data` | コンテンツデータ1件を再構築 |
 | `rebuild_site` | ブログ全体を再構築（`archive_type` で範囲を絞り込み可） |
 
-> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` は **「テンプレートの編集」権限**（`edit_templates`）を必要とします（v0.6.0 で追加。`create` / `update` / `delete` は従来ブログへのアクセス権限だけで実行できました）。`folder_create` / `folder_update` は `save_folder`、`folder_delete` は `delete_folder`（いずれも `manage_pages` に含まれます）。
+> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` は **「テンプレートの編集」権限**（`edit_templates`）を必要とします（v0.6.0 で追加。`create` / `update` / `delete` は従来ブログへのアクセス権限だけで実行できました）。`page_*` は **「ページの管理」権限**（`manage_pages`）を必要とします。`folder_create` / `folder_update` は `save_folder`、`folder_delete` は `delete_folder`（いずれも `manage_pages` に含まれます）。
 >
 > `template_preview` は任意の本文を MT テンプレートとして評価するため、保存と同等の権限を要求しています。`AllowFileInclude` を有効にしている環境では `<mt:Include file="...">` でサーバー上のファイルを読み出せてしまうためです。構文チェックのみで評価を伴わない `template_validate` はブログへのアクセス権限で実行できます。
 
@@ -67,7 +74,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `content_data_update` | コンテンツデータ更新（部分更新対応） |
 | `content_data_delete` | コンテンツデータ削除 |
 
-> 削除系ツール（`entry_delete` / `folder_delete` / `asset_delete` / `template_delete` / `content_data_delete`）は取り消せない操作です。AI が実行する前に対象を一覧・取得系ツールで確認するよう促してください。
+> 削除系ツール（`entry_delete` / `page_delete` / `folder_delete` / `asset_delete` / `template_delete` / `content_data_delete`）は取り消せない操作です。AI が実行する前に対象を一覧・取得系ツールで確認するよう促してください。
 
 ### AI の操作フロー
 
@@ -78,6 +85,12 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 ユーザー: 「テスト記事を追加して」
 AI:       blog_list → blog_id を確認
           → entry_create(blog_id, title="テスト記事", status="draft")
+
+ユーザー: 「会社概要ページを作って About フォルダに入れて公開して」
+AI:       blog_list → folder_list → folder_id を確認
+          → page_create(blog_id, title="会社概要", folder_id, status="publish")
+          → page_preview で内容確認
+          → rebuild_page
 
 ユーザー: 「コンテンツタイプ〇〇にデータを追加して」
 AI:       content_type_list → content_type_id を確認
@@ -121,6 +134,7 @@ MCP は HTTP リクエスト上で動くため、**`rebuild_site`（ブログ全
 |---|---|
 | テンプレートを直したので反映したい | `rebuild_template` |
 | 記事を作成・更新したので公開したい | `rebuild_entry` |
+| 固定ページを作成・更新したので公開したい | `rebuild_page` |
 | コンテンツデータを作成・更新したので公開したい | `rebuild_content_data` |
 | 特定のアーカイブだけ作り直したい | `rebuild_site`（`archive_type` を指定） |
 | デザイン全体を入れ替えたので全部作り直したい | `rebuild_site` |
@@ -492,11 +506,12 @@ plugins/MTMCP/
         └── Tools/
             ├── Blog.pm         # blog_list
             ├── Entry.pm        # entry_list / get / create / update / delete
+            ├── Page.pm         # page_list / get / create / update / delete / preview
             ├── Folder.pm       # folder_list / get / create / update / delete
             ├── Category.pm     # category_list / tag_list
             ├── Asset.pm        # asset_list / get / upload / delete / thumbnail
             ├── Template.pm     # template_list / get / create / update / delete / validate / preview / tag_list
-            ├── Rebuild.pm      # rebuild_template / entry / content_data / site
+            ├── Rebuild.pm      # rebuild_template / entry / page / content_data / site
             ├── ContentType.pm  # content_type_list / get / create
             └── ContentData.pm  # content_data_list / get / create / update / delete
 

@@ -49,6 +49,17 @@ sub errstr { 'stub error' }
 sub compile { 1 }
 sub errors  { [] }
 
+sub context {
+    return MT::Template::_Context->new;
+}
+
+sub build {
+    my ($self, $ctx) = @_;
+    my $entry = $ctx && $ctx->stash('entry');
+    my $title = $entry ? ($entry->title // '') : '';
+    return ($self->text // '') . $title;
+}
+
 for my $field (qw(id blog_id name type text outfile identifier build_type rebuild_me)) {
     no strict 'refs';
     *$field = sub {
@@ -56,6 +67,14 @@ for my $field (qw(id blog_id name type text outfile identifier build_type rebuil
         $self->{$field} = shift if @_;
         return $self->{$field};
     };
+}
+
+package MT::Template::_Context;
+sub new { bless { stash => {} }, shift }
+sub stash {
+    my ($self, $key, $val) = @_;
+    $self->{stash}{$key} = $val if @_ > 2;
+    return $self->{stash}{$key};
 }
 
 1;

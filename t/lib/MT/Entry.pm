@@ -35,8 +35,15 @@ sub new {
         status      => HOLD(),
         author_id   => undef,
         authored_on => undef,
+        modified_on => undef,
+        basename    => undef,
         class       => 'entry',
     }, $class;
+}
+
+sub exist {
+    my $class = shift;
+    return $class->load(@_) ? 1 : 0;
 }
 
 sub load {
@@ -66,8 +73,20 @@ sub load {
         if (exists $terms->{status}) {
             @objs = grep { defined $_->status && $_->status == $terms->{status} } @objs;
         }
+        if (exists $terms->{basename}) {
+            @objs = grep { ($_->basename // '') eq ($terms->{basename} // '') } @objs;
+        }
     }
 
+    if ($args && $args->{sort}) {
+        my $field = $args->{sort};
+        @objs = sort { ($a->$field // '') cmp ($b->$field // '') } @objs;
+        @objs = reverse @objs if ($args->{direction} // '') eq 'descend';
+    }
+    if ($args && $args->{offset}) {
+        my $off = $args->{offset};
+        @objs = $off < @objs ? @objs[ $off .. $#objs ] : ();
+    }
     if ($args && $args->{limit} && @objs > $args->{limit}) {
         @objs = @objs[ 0 .. $args->{limit} - 1 ];
     }
@@ -96,7 +115,7 @@ sub errstr    { 'stub error' }
 sub permalink { '' }
 
 for my $field (
-    qw(id blog_id title text text_more excerpt status author_id authored_on class)
+    qw(id blog_id title text text_more excerpt status author_id authored_on modified_on basename class)
     )
 {
     no strict 'refs';

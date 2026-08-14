@@ -15,6 +15,12 @@ my %TOOL_HANDLERS = (
     'entry_create'    => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::create(@_)      },
     'entry_update'    => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::update(@_)      },
     'entry_delete'    => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::remove(@_)      },
+    'page_list'       => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::list(@_)         },
+    'page_get'        => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::get(@_)          },
+    'page_create'     => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::create(@_)       },
+    'page_update'     => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::update(@_)       },
+    'page_delete'     => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::remove(@_)       },
+    'page_preview'    => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::preview(@_)      },
     'category_list'   => sub { require MTMCP::Tools::Category; MTMCP::Tools::Category::list(@_)     },
     'tag_list'        => sub { require MTMCP::Tools::Category; MTMCP::Tools::Category::list_tags(@_)},
     'folder_list'     => sub { require MTMCP::Tools::Folder;   MTMCP::Tools::Folder::list(@_)       },
@@ -38,6 +44,7 @@ my %TOOL_HANDLERS = (
     'rebuild_site'         => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::site(@_)          },
     'rebuild_template'     => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::template(@_)      },
     'rebuild_entry'        => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::entry(@_)         },
+    'rebuild_page'         => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::page(@_)          },
     'rebuild_content_data' => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::content_data(@_)  },
     'content_type_list'    => sub { require MTMCP::Tools::ContentType;  MTMCP::Tools::ContentType::list(@_)      },
     'content_type_get'     => sub { require MTMCP::Tools::ContentType;  MTMCP::Tools::ContentType::get(@_)       },
@@ -175,6 +182,91 @@ sub _tool_definitions {
                 },
             },
         },
+        {
+            name        => 'page_list',
+            description => '指定ブログの固定ページ一覧を取得する。記事の entry_list とは別。フォルダで絞る場合は folder_list で ID を確認してから folder_id を渡すこと。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id'],
+                properties => {
+                    blog_id   => { type => 'integer', description => 'ブログID（blog_list で確認）' },
+                    limit     => { type => 'integer', description => '取得件数（デフォルト20）' },
+                    offset    => { type => 'integer', description => '取得開始位置（ページネーション用、デフォルト0）' },
+                    status    => { type => 'string', enum => ['publish','draft','all'], description => 'ページステータス（省略時は publish）' },
+                    keyword   => { type => 'string', description => 'タイトル・本文に対する部分一致検索キーワード' },
+                    folder_id => { type => 'integer', description => 'フォルダID（folder_list で確認。指定時はそのフォルダ配下のみ）' },
+                },
+            },
+        },
+        {
+            name        => 'page_get',
+            description => '固定ページIDを指定して1件を本文ごと取得する。記事IDを渡しても見つからない（entry_get を使うこと）。',
+            inputSchema => {
+                type     => 'object',
+                required => ['page_id'],
+                properties => {
+                    page_id => { type => 'integer', description => '固定ページID' },
+                },
+            },
+        },
+        {
+            name        => 'page_create',
+            description => '固定ページを新規作成する。記事の entry_create とは別。フォルダは単数の folder_id（カテゴリIDは不可）。フォルダIDは folder_list で確認する。status 省略時は下書き。公開ファイルは作らないので、公開するには rebuild_page を使うこと。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id', 'title'],
+                properties => {
+                    blog_id    => { type => 'integer', description => 'ブログID（blog_list で確認）' },
+                    title      => { type => 'string',  description => 'ページタイトル' },
+                    body       => { type => 'string',  description => '本文（HTML可）' },
+                    status     => { type => 'string',  enum => ['publish','draft'], description => '省略時は draft（下書き）' },
+                    folder_id  => { type => 'integer', description => 'フォルダID（1件。folder_list で確認。カテゴリIDは不可）' },
+                    basename   => { type => 'string',  description => '出力ファイル名のベース（省略時は MT が自動生成）' },
+                    author_id  => { type => 'integer', description => '著者ユーザーID（省略時は管理者ユーザー）' },
+                },
+            },
+        },
+        {
+            name        => 'page_update',
+            description => '既存の固定ページを更新する。指定したフィールドのみ上書きされる。folder_id を省略するとフォルダは変えない。外すときは folder_id: 0 を明示する。公開ファイルは更新されないので、必要なら rebuild_page を使うこと。',
+            inputSchema => {
+                type     => 'object',
+                required => ['page_id'],
+                properties => {
+                    page_id    => { type => 'integer', description => '更新する固定ページのID' },
+                    title      => { type => 'string',  description => '新しいタイトル' },
+                    body       => { type => 'string',  description => '新しい本文' },
+                    status     => { type => 'string',  enum => ['publish','draft'], description => '新しいステータス' },
+                    folder_id  => { type => 'integer', description => 'フォルダID。0 でフォルダ解除。省略時は変更しない' },
+                    basename   => { type => 'string',  description => '新しい basename' },
+                },
+            },
+        },
+        {
+            name        => 'page_delete',
+            description => '固定ページを削除する。取り消せない。第1弾では公開済みアーカイブファイルは残ることがある。',
+            inputSchema => {
+                type     => 'object',
+                required => ['page_id'],
+                properties => {
+                    page_id => { type => 'integer', description => '削除する固定ページのID' },
+                },
+            },
+        },
+        {
+            name        => 'page_preview',
+            description => '固定ページを Page アーカイブテンプレートでビルドして HTML を返す（ファイルは書き出さない）。page_id なら保存済み本文、blog_id と title/body なら未保存プレビュー。Page アーカイブの preferred マップが必要。権限はページの管理（manage_pages）。',
+            inputSchema => {
+                type     => 'object',
+                properties => {
+                    page_id => { type => 'integer', description => '既存ページのID（本文は DB。body があれば未保存上書き）' },
+                    blog_id => { type => 'integer', description => '未保存プレビュー時のブログID' },
+                    title   => { type => 'string',  description => '未保存プレビュー時のタイトル' },
+                    body    => { type => 'string',  description => '未保存プレビュー時の本文、または既存ページへの上書き' },
+                },
+            },
+        },
+
         {
             name        => 'category_list',
             description => '指定ブログのカテゴリ一覧を取得する。entry_create でカテゴリを指定する前に呼ぶこと。',
@@ -592,6 +684,7 @@ sub _tool_definitions {
         {
             name        => 'rebuild_entry',
             description => '記事1件を再構築（公開）する。記事の作成・更新後に公開ページへ反映したいときに使う。'
+                . '固定ページには rebuild_entry ではなく rebuild_page を使うこと。'
                 . 'デフォルトでは月別・カテゴリアーカイブやインデックスなど、その記事に依存するページも一緒に再構築する。',
             inputSchema => {
                 type     => 'object',
@@ -602,6 +695,19 @@ sub _tool_definitions {
                 },
             },
         },
+        {
+            name        => 'rebuild_page',
+            description => '固定ページ1件を再構築（公開）する。page_create / page_update のあとに使う。記事には rebuild_entry を使うこと。',
+            inputSchema => {
+                type     => 'object',
+                required => ['page_id'],
+                properties => {
+                    page_id            => { type => 'integer', description => '再構築する固定ページのID' },
+                    build_dependencies => { type => 'boolean', description => '依存するアーカイブ・インデックスも再構築するか（省略時は true）' },
+                },
+            },
+        },
+
         {
             name        => 'rebuild_content_data',
             description => 'コンテンツデータ1件を再構築（公開）する。content_data_create / content_data_update のあとに使う。',
@@ -617,7 +723,7 @@ sub _tool_definitions {
         {
             name        => 'rebuild_site',
             description => 'ブログ全体を再構築（公開）する。記事数の多いサイトでは数分以上かかり、HTTPのタイムアウトで失敗することがある。'
-                . 'まずは rebuild_template / rebuild_entry で範囲を絞れないか検討し、それでも全体再構築が必要なときだけ使うこと。'
+                . 'まずは rebuild_template / rebuild_entry / rebuild_page で範囲を絞れないか検討し、それでも全体再構築が必要なときだけ使うこと。'
                 . 'archive_type を指定すると、そのアーカイブタイプのみに絞って再構築できる。',
             inputSchema => {
                 type     => 'object',
