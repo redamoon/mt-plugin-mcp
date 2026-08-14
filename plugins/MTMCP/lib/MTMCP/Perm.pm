@@ -23,4 +23,26 @@ sub require_blog_access {
     return;
 }
 
+# require_blog_access に加えて、MT の権限アクション（can_do の引数）を要求する。
+# 再構築やテンプレート編集のように、単にブログへアクセスできるだけでは
+# 許可すべきでない操作で使う。
+#
+# $action は MT の permitted_action 名（例: 'rebuild', 'edit_templates'）。
+# $label は権限が足りなかったときにユーザーへ表示する日本語の権限名。
+sub require_blog_permission {
+    my ($app, $blog_id, $action, $label) = @_;
+    require_blog_access($app, $blog_id);
+
+    my $user = $app->user;
+    return if $user->is_superuser;
+
+    require MT::Permission;
+    my $perm = MT::Permission->load({ author_id => $user->id, blog_id => $blog_id });
+    # require_blog_access を通過している以上 $perm は存在するはずだが、
+    # 取得できなかった場合はデフォルト拒否とする。
+    die "「$label」の権限がありません（blog_id: $blog_id）\n"
+        unless $perm && $perm->can_do($action);
+    return;
+}
+
 1;

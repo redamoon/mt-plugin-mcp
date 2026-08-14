@@ -27,6 +27,13 @@ my %TOOL_HANDLERS = (
     'template_create'      => sub { require MTMCP::Tools::Template;     MTMCP::Tools::Template::create(@_)       },
     'template_update'      => sub { require MTMCP::Tools::Template;     MTMCP::Tools::Template::update(@_)       },
     'template_delete'      => sub { require MTMCP::Tools::Template;     MTMCP::Tools::Template::remove(@_)       },
+    'template_validate'    => sub { require MTMCP::Tools::Template;     MTMCP::Tools::Template::validate(@_)     },
+    'template_preview'     => sub { require MTMCP::Tools::Template;     MTMCP::Tools::Template::preview(@_)      },
+    'template_tag_list'    => sub { require MTMCP::Tools::Template;     MTMCP::Tools::Template::tag_list(@_)     },
+    'rebuild_site'         => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::site(@_)          },
+    'rebuild_template'     => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::template(@_)      },
+    'rebuild_entry'        => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::entry(@_)         },
+    'rebuild_content_data' => sub { require MTMCP::Tools::Rebuild;      MTMCP::Tools::Rebuild::content_data(@_)  },
     'content_type_list'    => sub { require MTMCP::Tools::ContentType;  MTMCP::Tools::ContentType::list(@_)      },
     'content_type_get'     => sub { require MTMCP::Tools::ContentType;  MTMCP::Tools::ContentType::get(@_)       },
     'content_type_create'  => sub { require MTMCP::Tools::ContentType;  MTMCP::Tools::ContentType::create(@_)    },
@@ -47,7 +54,7 @@ sub dispatch {
         return _result($id, {
             protocolVersion => $PROTOCOL_VERSION,
             capabilities    => { tools => { listChanged => JSON::false } },
-            serverInfo      => { name => 'MT MCP Server', version => '0.4.0' },
+            serverInfo      => { name => 'MT MCP Server', version => '0.6.0' },
         });
     }
 
@@ -281,28 +288,91 @@ sub _tool_definitions {
         },
         {
             name        => 'template_create',
-            description => '新規テンプレートを作成する。type には index / individual / archive / category / page / widget / custom などを指定する。',
+            description => '新規テンプレートを作成する。type には index / individual / archive / category / page / widget / custom などを指定する。'
+                . '保存前に MT テンプレート構文を自動検証し、エラーがあれば行番号付きで返して保存を中止する（その場合は本文を修正して再実行すること）。'
+                . '本文を書く前に template_tag_list で使えるタグを確認し、既存テンプレートの書き方を template_get で参考にすると成功しやすい。'
+                . 'type が index のときは outfile（出力ファイル名）も必ず指定すること。'
+                . '作成しただけでは公開ファイルは生成されないため、必要に応じて rebuild_template を実行すること。',
             inputSchema => {
                 type     => 'object',
                 required => ['blog_id', 'name', 'type'],
                 properties => {
-                    blog_id => { type => 'integer', description => 'ブログID（blog_list で確認）' },
-                    name    => { type => 'string',  description => 'テンプレート名' },
-                    type    => { type => 'string',  description => 'テンプレートタイプ（index, individual, archive, category, page, widget, custom など）' },
-                    body    => { type => 'string',  description => 'テンプレート本文' },
-                    outfile => { type => 'string',  description => '出力ファイル名（index系テンプレートで使用）' },
+                    blog_id    => { type => 'integer', description => 'ブログID（blog_list で確認）' },
+                    name       => { type => 'string',  description => 'テンプレート名' },
+                    type       => { type => 'string',  description => 'テンプレートタイプ（index, individual, archive, category, page, widget, custom など）' },
+                    body       => { type => 'string',  description => 'テンプレート本文（MTタグを含む HTML）' },
+                    outfile    => { type => 'string',  description => '出力ファイル名（例: index.html）。type が index の場合は必須（build_type: 0 のときを除く）' },
+                    identifier => { type => 'string',  description => 'テンプレート識別子（<mt:Include identifier="..."> で参照するための名前）' },
+                    build_type => { type => 'integer', enum => [0, 1, 2, 3, 4, 5], description => '公開方法。0=公開しない / 1=すぐに公開（オンデマンド） / 2=手動 / 3=ダイナミック / 4=バックグラウンド / 5=スケジュール。省略時は MT のデフォルト' },
+                    rebuild_me => { type => 'boolean', description => 'インデックスの再構築時に一緒に再構築するか（index系テンプレート向け）' },
+                    skip_validation => { type => 'boolean', description => '構文検証をスキップして強制的に保存する。通常は指定しないこと' },
                 },
             },
         },
         {
             name        => 'template_update',
-            description => 'テンプレートの本文を更新する。',
+            description => 'テンプレートを更新する。body / name / type / outfile / identifier / build_type / rebuild_me のうち指定した項目のみ上書きされる（最低1つ必要）。'
+                . 'body を指定した場合は保存前に構文を自動検証し、エラーがあれば行番号付きで返して保存を中止する。'
+                . '更新後に公開ファイルへ反映するには rebuild_template（または rebuild_site）を実行すること。',
             inputSchema => {
                 type     => 'object',
-                required => ['template_id', 'body'],
+                required => ['template_id'],
                 properties => {
                     template_id => { type => 'integer', description => 'テンプレートID' },
                     body        => { type => 'string',  description => '新しいテンプレート本文' },
+                    name        => { type => 'string',  description => '新しいテンプレート名' },
+                    type        => { type => 'string',  description => '新しいテンプレートタイプ' },
+                    outfile     => { type => 'string',  description => '新しい出力ファイル名' },
+                    identifier  => { type => 'string',  description => '新しいテンプレート識別子' },
+                    build_type  => { type => 'integer', enum => [0, 1, 2, 3, 4, 5], description => '公開方法。0=公開しない / 1=すぐに公開 / 2=手動 / 3=ダイナミック / 4=バックグラウンド / 5=スケジュール' },
+                    rebuild_me  => { type => 'boolean', description => 'インデックスの再構築時に一緒に再構築するか' },
+                    skip_validation => { type => 'boolean', description => '構文検証をスキップして強制的に保存する。通常は指定しないこと' },
+                },
+            },
+        },
+        {
+            name        => 'template_validate',
+            description => 'テンプレート本文の MT 構文を検証する（保存はしない）。閉じ忘れたブロックタグや存在しないタグを行番号付きで指摘する。'
+                . 'テンプレートを自分で書いたときは、保存前にこのツールで確認すると失敗を減らせる。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id', 'body'],
+                properties => {
+                    blog_id => { type => 'integer', description => 'ブログID（blog_list で確認）' },
+                    body    => { type => 'string',  description => '検証するテンプレート本文' },
+                    type    => { type => 'string',  description => 'テンプレートタイプ（省略時は index）' },
+                },
+            },
+        },
+        {
+            name        => 'template_preview',
+            description => 'テンプレートを実際にビルドして出力HTMLを返す（ファイルは書き出さないので公開内容に影響しない）。'
+                . 'body を渡せば未保存の本文を、template_id を渡せば保存済みテンプレートをプレビューできる。'
+                . '記事コンテキストが必要なテンプレート（individual など）は entry_id も渡すこと。出力は10万文字で打ち切られる。'
+                . '本文を評価するため「テンプレートの編集」権限が必要（構文チェックだけなら template_validate を使うこと）。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id'],
+                properties => {
+                    blog_id     => { type => 'integer', description => 'ブログID（blog_list で確認）' },
+                    body        => { type => 'string',  description => 'プレビューするテンプレート本文（template_id と排他。body を優先）' },
+                    template_id => { type => 'integer', description => '保存済みテンプレートのID（body を指定しない場合に使用）' },
+                    type        => { type => 'string',  description => 'テンプレートタイプ（省略時は index、または元テンプレートのタイプ）' },
+                    entry_id    => { type => 'integer', description => '記事コンテキストとして使う記事ID（individual/archive 系テンプレートで必要）' },
+                },
+            },
+        },
+        {
+            name        => 'template_tag_list',
+            description => 'この MT 環境で実際に使える MT テンプレートタグの一覧を取得する。プラグインが追加したタグも含まれる。'
+                . 'テンプレートを書く前にこのツールで正しいタグ名を確認すること（存在しないタグを書くと保存時に検証エラーになる）。'
+                . '素の MT 9 でも600件以上あるため、keyword で絞り込むこと（例: keyword="Entry" で記事関連のタグ）。',
+            inputSchema => {
+                type     => 'object',
+                properties => {
+                    keyword => { type => 'string',  description => 'タグ名に対する部分一致検索キーワード（例: Entry, Category, Asset）' },
+                    kind    => { type => 'string',  enum => ['function', 'block', 'modifier'], description => 'function=単体タグ / block=開始終了のあるタグ / modifier=グローバルモディファイア。省略時は全種類' },
+                    limit   => { type => 'integer', description => '取得件数（デフォルト100）' },
                 },
             },
         },
@@ -428,6 +498,59 @@ sub _tool_definitions {
                 required => ['content_data_id'],
                 properties => {
                     content_data_id => { type => 'integer', description => '削除するコンテンツデータID' },
+                },
+            },
+        },
+        {
+            name        => 'rebuild_template',
+            description => 'テンプレート1枚を再構築（公開）して、変更を実際のファイルに反映する。'
+                . 'template_create / template_update のあとに使うのはこのツール（rebuild_site より圧倒的に速い）。'
+                . 'インデックステンプレートはそのファイルのみ、アーカイブテンプレートは紐づくアーカイブタイプのみを再構築する。',
+            inputSchema => {
+                type     => 'object',
+                required => ['template_id'],
+                properties => {
+                    template_id => { type => 'integer', description => '再構築するテンプレートのID（template_list で確認）' },
+                },
+            },
+        },
+        {
+            name        => 'rebuild_entry',
+            description => '記事1件を再構築（公開）する。記事の作成・更新後に公開ページへ反映したいときに使う。'
+                . 'デフォルトでは月別・カテゴリアーカイブやインデックスなど、その記事に依存するページも一緒に再構築する。',
+            inputSchema => {
+                type     => 'object',
+                required => ['entry_id'],
+                properties => {
+                    entry_id           => { type => 'integer', description => '再構築する記事のID' },
+                    build_dependencies => { type => 'boolean', description => '依存するアーカイブ・インデックスも再構築するか（省略時は true）。false にすると記事ページのみで高速' },
+                },
+            },
+        },
+        {
+            name        => 'rebuild_content_data',
+            description => 'コンテンツデータ1件を再構築（公開）する。content_data_create / content_data_update のあとに使う。',
+            inputSchema => {
+                type     => 'object',
+                required => ['content_data_id'],
+                properties => {
+                    content_data_id    => { type => 'integer', description => '再構築するコンテンツデータのID' },
+                    build_dependencies => { type => 'boolean', description => '依存するアーカイブ・インデックスも再構築するか（省略時は true）' },
+                },
+            },
+        },
+        {
+            name        => 'rebuild_site',
+            description => 'ブログ全体を再構築（公開）する。記事数の多いサイトでは数分以上かかり、HTTPのタイムアウトで失敗することがある。'
+                . 'まずは rebuild_template / rebuild_entry で範囲を絞れないか検討し、それでも全体再構築が必要なときだけ使うこと。'
+                . 'archive_type を指定すると、そのアーカイブタイプのみに絞って再構築できる。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id'],
+                properties => {
+                    blog_id      => { type => 'integer', description => 'ブログID（blog_list で確認）' },
+                    archive_type => { type => 'string',  description => '再構築するアーカイブタイプ（Individual, Monthly, Category, Page など）。省略時は全アーカイブ' },
+                    no_indexes   => { type => 'boolean', description => 'true にするとインデックステンプレートの再構築をスキップする' },
                 },
             },
         },
