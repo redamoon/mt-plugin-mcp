@@ -7,12 +7,25 @@ use lib "$FindBin::Bin/../plugins/MTMCP/lib";
 
 use MTMCP::Tools::Entry;
 use MTMCP::Tools::Rebuild;
+use MT::Blog;
 
 {
     no warnings 'redefine';
     *MTMCP::Perm::require_blog_access     = sub { 1 };
     *MTMCP::Perm::require_blog_permission = sub { 1 };
 }
+
+package FakeConfig;
+sub new {
+    my ($class, $flag) = @_;
+    bless { DeleteFilesAtRebuild => $flag }, $class;
+}
+sub DeleteFilesAtRebuild { $_[0]{DeleteFilesAtRebuild} }
+
+package FakeApp;
+sub config { $_[0]{config} }
+
+package main;
 
 my $app = bless {}, 'FakeApp';
 
@@ -140,6 +153,28 @@ sub _seed_page {
     is($got->{id}, 1, '取得したのは Entry');
     my $page = eval { MTMCP::Tools::Entry::get($app, { entry_id => 99 }) };
     ok(!$page, '共存していても Page ID は取得できない');
+}
+
+
+{
+    MT::Entry::reset();
+    MT::Blog::reset();
+    _seed_entry(id => 1, title => 'Delete files');
+    my $app_on = bless { config => FakeConfig->new(1) }, 'FakeApp';
+    my $got = eval { MTMCP::Tools::Entry::remove($app_on, { entry_id => 1 }) };
+    ok($got, 'DeleteFilesAtRebuild 時も entry_delete は成功') or diag($@);
+    is(scalar @MT::Blog::_Publisher::REMOVED_ARCHIVE, 1, 'entry も公開アーカイブ削除を呼ぶ');
+    is($MT::Blog::_Publisher::REMOVED_ARCHIVE[0]{ArchiveType}, 'Individual', 'ArchiveType は Individual');
+}
+
+{
+    MT::Entry::reset();
+    MT::Blog::reset();
+    _seed_entry(id => 1, title => 'Keep files');
+    my $app_off = bless { config => FakeConfig->new(0) }, 'FakeApp';
+    my $got = eval { MTMCP::Tools::Entry::remove($app_off, { entry_id => 1 }) };
+    ok($got, '無効時も entry_delete は成功') or diag($@);
+    is(scalar @MT::Blog::_Publisher::REMOVED_ARCHIVE, 0, 'entry も無効時は公開ファイルを消さない');
 }
 
 done_testing;

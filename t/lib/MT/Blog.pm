@@ -10,6 +10,7 @@ sub reset {
     %STORE   = ();
     @FLUSHED = ();
     @SAVED   = ();
+    @MT::Blog::_Publisher::REMOVED_ARCHIVE = ();
 }
 
 sub new {
@@ -63,7 +64,14 @@ for my $field (qw(id name site_path archive_type convert_paras category_order)) 
 }
 
 package MT::Blog::_Publisher;
+our @REMOVED_ARCHIVE;
 sub new { bless {}, shift }
+sub reset_archive_removals { @REMOVED_ARCHIVE = () }
+sub remove_entry_archive_file {
+    my ($self, %param) = @_;
+    push @REMOVED_ARCHIVE, \%param;
+    return 1;
+}
 
 sub archive_types {
     return qw(

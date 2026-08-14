@@ -206,7 +206,7 @@ sub _tool_definitions {
         },
         {
             name        => 'entry_delete',
-            description => '記事を削除する。取り消せない操作なので、実行前に対象の記事を確認すること。',
+            description => '記事を削除する。取り消せない。DeleteFilesAtRebuild が有効なら Individual アーカイブの公開ファイルも削除する。無効なら公開ディレクトリに HTML が残ることがある。',
             inputSchema => {
                 type     => 'object',
                 required => ['entry_id'],
@@ -296,7 +296,7 @@ sub _tool_definitions {
         },
         {
             name        => 'page_delete',
-            description => '固定ページを削除する。取り消せない。第1弾では公開済みアーカイブファイルは残ることがある。',
+            description => '固定ページを削除する。取り消せない。DeleteFilesAtRebuild が有効なら Page アーカイブの公開ファイルも削除する。無効なら公開ディレクトリに HTML が残ることがある。',
             inputSchema => {
                 type     => 'object',
                 required => ['page_id'],

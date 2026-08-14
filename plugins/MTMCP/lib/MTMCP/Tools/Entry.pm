@@ -36,6 +36,28 @@ sub list {
 
 # mt_entry は Entry と Page で共有される。スカラー load / { id => $id } は
 # class フィルタを通さないため、Page ID でもオブジェクトが返る。
+
+# Data API と同様、DeleteFilesAtRebuild のときだけ公開アーカイブを消す。
+# page_delete と entry_delete で方針を揃える（片方だけ変えないこと）。
+sub _maybe_remove_entry_archive_file {
+    my ($app, $obj, $archive_type) = @_;
+    return unless $app && $obj && defined $archive_type && $archive_type ne '';
+    my $cfg = ($app->can('config') ? eval { $app->config } : undef);
+    return unless $cfg && eval { $cfg->DeleteFilesAtRebuild };
+
+    my $pub = ($app->can('publisher') ? eval { $app->publisher } : undef);
+    if (!$pub) {
+        require MT::Blog;
+        my $blog = eval { MT::Blog->load($obj->blog_id) };
+        $pub = ($blog && $blog->can('publisher')) ? eval { $blog->publisher } : undef;
+    }
+    return unless $pub && $pub->can('remove_entry_archive_file');
+    $pub->remove_entry_archive_file(
+        Entry       => $obj,
+        ArchiveType => $archive_type,
+    );
+}
+
 sub _load_entry {
     my ($entry_id) = @_;
     return MT::Entry->load({ id => $entry_id, class => 'entry' });
@@ -47,6 +69,7 @@ sub remove {
     my $entry = _load_entry($entry_id) or die "Entry not found: $entry_id\n";
     MTMCP::Perm::require_blog_access($app, $entry->blog_id);
     my $title = $entry->title;
+    _maybe_remove_entry_archive_file($app, $entry, 'Individual');
     $entry->remove or die $entry->errstr . "\n";
     return { entry_id => $entry_id, status => 'deleted', title => $title };
 }

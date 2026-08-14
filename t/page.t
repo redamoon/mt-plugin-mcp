@@ -23,6 +23,13 @@ use JSON;
     *MTMCP::Perm::require_blog_permission = sub { 1 };
 }
 
+package FakeConfig;
+sub new {
+    my ($class, $flag) = @_;
+    bless { DeleteFilesAtRebuild => $flag }, $class;
+}
+sub DeleteFilesAtRebuild { $_[0]{DeleteFilesAtRebuild} }
+
 package FakeApp;
 sub rebuild_entry {
     my ($self, %param) = @_;
@@ -30,6 +37,8 @@ sub rebuild_entry {
     return 1;
 }
 sub errstr { '' }
+sub config     { $_[0]{config} }
+sub publisher  { $_[0]{publisher} }
 
 package main;
 
@@ -236,6 +245,28 @@ sub _seed_category_in_folder_store {
     ok($got, 'page_delete は成功する') or diag($@);
     is($got->{status}, 'deleted', 'status は deleted');
     is(scalar @MT::Entry::REMOVED, 1, 'remove が呼ばれる');
+    ok(!MT::Page->load({ id => 10, class => 'page' }), 'Page はストアから消える');
+    is(scalar @MT::Blog::_Publisher::REMOVED_ARCHIVE, 0, 'config なしでは公開ファイルを消さない');
+}
+
+{
+    _reset_all();
+    _seed_page(id => 10, title => 'Delete files');
+    my $app_on = bless { config => FakeConfig->new(1) }, 'FakeApp';
+    my $got = eval { MTMCP::Tools::Page::remove($app_on, { page_id => 10 }) };
+    ok($got, 'DeleteFilesAtRebuild 時も page_delete は成功') or diag($@);
+    is(scalar @MT::Blog::_Publisher::REMOVED_ARCHIVE, 1, '公開アーカイブ削除を呼ぶ');
+    is($MT::Blog::_Publisher::REMOVED_ARCHIVE[0]{ArchiveType}, 'Page', 'ArchiveType は Page');
+    is($MT::Blog::_Publisher::REMOVED_ARCHIVE[0]{Entry}->id, 10, 'Entry は対象 Page');
+}
+
+{
+    _reset_all();
+    _seed_page(id => 10, title => 'Keep files');
+    my $app_off = bless { config => FakeConfig->new(0) }, 'FakeApp';
+    my $got = eval { MTMCP::Tools::Page::remove($app_off, { page_id => 10 }) };
+    ok($got, 'DeleteFilesAtRebuild 無効でも DB 削除は成功') or diag($@);
+    is(scalar @MT::Blog::_Publisher::REMOVED_ARCHIVE, 0, '無効時は公開ファイルを消さない');
     ok(!MT::Page->load({ id => 10, class => 'page' }), 'Page はストアから消える');
 }
 
