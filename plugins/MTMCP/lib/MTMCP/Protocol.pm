@@ -292,6 +292,7 @@ sub _tool_definitions {
                 . '保存前に MT テンプレート構文を自動検証し、エラーがあれば行番号付きで返して保存を中止する（その場合は本文を修正して再実行すること）。'
                 . '本文を書く前に template_tag_list で使えるタグを確認し、既存テンプレートの書き方を template_get で参考にすると成功しやすい。'
                 . 'type が index のときは outfile（出力ファイル名）も必ず指定すること。'
+                . 'type が widgetset のときは body を指定できない（指定するとエラー。本文はウィジェット構成から自動生成され、渡した body は保存されない）。'
                 . '作成しただけでは公開ファイルは生成されないため、必要に応じて rebuild_template を実行すること。',
             inputSchema => {
                 type     => 'object',
@@ -300,7 +301,7 @@ sub _tool_definitions {
                     blog_id    => { type => 'integer', description => 'ブログID（blog_list で確認）' },
                     name       => { type => 'string',  description => 'テンプレート名' },
                     type       => { type => 'string',  description => 'テンプレートタイプ（index, individual, archive, category, page, widget, custom など）' },
-                    body       => { type => 'string',  description => 'テンプレート本文（MTタグを含む HTML）' },
+                    body       => { type => 'string',  description => 'テンプレート本文（MTタグを含む HTML）。type が widgetset のときは指定不可（指定するとエラー。本文はウィジェット構成から自動生成されるため保存されない）' },
                     outfile    => { type => 'string',  description => '出力ファイル名（例: index.html）。type が index の場合は必須（build_type: 0 のときを除く）' },
                     identifier => { type => 'string',  description => 'テンプレート識別子（<mt:Include identifier="..."> で参照するための名前）' },
                     build_type => { type => 'integer', enum => [0, 1, 2, 3, 4, 5], description => '公開方法。0=公開しない / 1=すぐに公開（オンデマンド） / 2=手動 / 3=ダイナミック / 4=バックグラウンド / 5=スケジュール。省略時は MT のデフォルト' },
@@ -313,13 +314,14 @@ sub _tool_definitions {
             name        => 'template_update',
             description => 'テンプレートを更新する。body / name / type / outfile / identifier / build_type / rebuild_me のうち指定した項目のみ上書きされる（最低1つ必要）。'
                 . 'body を指定した場合は保存前に構文を自動検証し、エラーがあれば行番号付きで返して保存を中止する。'
+                . 'type が widgetset のときは body を指定できない（指定するとエラー。本文はウィジェット構成から自動生成され、渡した body は保存されない）。'
                 . '更新後に公開ファイルへ反映するには rebuild_template（または rebuild_site）を実行すること。',
             inputSchema => {
                 type     => 'object',
                 required => ['template_id'],
                 properties => {
                     template_id => { type => 'integer', description => 'テンプレートID' },
-                    body        => { type => 'string',  description => '新しいテンプレート本文' },
+                    body        => { type => 'string',  description => '新しいテンプレート本文。type が widgetset のときは指定不可（指定するとエラー。本文はウィジェット構成から自動生成されるため保存されない）' },
                     name        => { type => 'string',  description => '新しいテンプレート名' },
                     type        => { type => 'string',  description => '新しいテンプレートタイプ' },
                     outfile     => { type => 'string',  description => '新しい出力ファイル名' },
