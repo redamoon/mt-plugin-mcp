@@ -17,6 +17,7 @@ my %TOOL_HANDLERS = (
     'entry_delete'    => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::remove(@_)      },
     'entry_preview'   => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::preview(@_)     },
     'entry_export'    => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::export(@_)      },
+    'entry_import'    => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::import_entries(@_) },
     'page_list'       => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::list(@_)         },
     'page_get'        => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::get(@_)          },
     'page_create'     => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::create(@_)       },
@@ -245,6 +246,22 @@ sub _tool_definitions {
                 properties => {
                     entry_id => { type => 'integer', description => '記事ID（Page ID は不可。entry_list で確認）' },
                     blog_id  => { type => 'integer', description => 'ブログID。指定時は記事の blog_id と一致必須' },
+                },
+            },
+        },
+        {
+            name        => 'entry_import',
+            description => '記事を一括作成する破壊的操作。MT Import/Export テキスト（body）から記事を作る。confirm: true 必須。'
+                . '著者は常に呼び出しユーザー（ユーザー新規作成なし）。ImportPath は使わない。default_status 省略時は draft。再構築しない。'
+                . '本文は 1MB まで。サイトバックアップや移行用一括投入の代替ではない。権限はブログのインポート（import_blog）。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id', 'body', 'confirm'],
+                properties => {
+                    blog_id         => { type => 'integer', description => 'ブログID（blog_list で確認）' },
+                    body            => { type => 'string',  description => 'MT Import/Export テキスト。ファイルパスや ImportPath は不可' },
+                    confirm         => { type => 'boolean', description => 'true のときだけ実行する' },
+                    default_status  => { type => 'string', enum => ['draft', 'publish'], description => '省略時は draft（サイト既定の公開にはしない）' },
                 },
             },
         },
