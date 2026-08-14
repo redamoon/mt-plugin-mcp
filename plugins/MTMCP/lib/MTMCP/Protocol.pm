@@ -17,6 +17,11 @@ my %TOOL_HANDLERS = (
     'entry_delete'    => sub { require MTMCP::Tools::Entry;    MTMCP::Tools::Entry::remove(@_)      },
     'category_list'   => sub { require MTMCP::Tools::Category; MTMCP::Tools::Category::list(@_)     },
     'tag_list'        => sub { require MTMCP::Tools::Category; MTMCP::Tools::Category::list_tags(@_)},
+    'folder_list'     => sub { require MTMCP::Tools::Folder;   MTMCP::Tools::Folder::list(@_)       },
+    'folder_get'      => sub { require MTMCP::Tools::Folder;   MTMCP::Tools::Folder::get(@_)        },
+    'folder_create'   => sub { require MTMCP::Tools::Folder;   MTMCP::Tools::Folder::create(@_)     },
+    'folder_update'   => sub { require MTMCP::Tools::Folder;   MTMCP::Tools::Folder::update(@_)     },
+    'folder_delete'   => sub { require MTMCP::Tools::Folder;   MTMCP::Tools::Folder::remove(@_)     },
     'asset_list'      => sub { require MTMCP::Tools::Asset;    MTMCP::Tools::Asset::list(@_)        },
     'asset_get'       => sub { require MTMCP::Tools::Asset;    MTMCP::Tools::Asset::get(@_)         },
     'asset_upload'    => sub { require MTMCP::Tools::Asset;    MTMCP::Tools::Asset::upload(@_)      },
@@ -192,6 +197,74 @@ sub _tool_definitions {
                 },
             },
         },
+        {
+            name        => 'folder_list',
+            description => '指定ブログのフォルダ一覧を取得する。固定ページ用の置き場所であり、記事カテゴリ（category_list）とは別。page_create の folder_id を調べるときに使う。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id'],
+                properties => {
+                    blog_id   => { type => 'integer', description => 'ブログID' },
+                    parent_id => { type => 'integer', description => '親フォルダID。0 でトップレベルのみ。省略時は全件' },
+                    keyword   => { type => 'string',  description => 'ラベル・basename の部分一致' },
+                    limit     => { type => 'integer', description => '取得件数' },
+                    offset    => { type => 'integer', description => '取得開始位置' },
+                },
+            },
+        },
+        {
+            name        => 'folder_get',
+            description => 'フォルダIDを指定して1件取得する。カテゴリIDを渡すと Folder not found になる。',
+            inputSchema => {
+                type     => 'object',
+                required => ['folder_id'],
+                properties => {
+                    folder_id => { type => 'integer', description => 'フォルダID' },
+                },
+            },
+        },
+        {
+            name        => 'folder_create',
+            description => '固定ページ用フォルダを作成する。記事カテゴリの作成ではない。親は同じブログのフォルダに限る。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id', 'label'],
+                properties => {
+                    blog_id     => { type => 'integer', description => 'ブログID' },
+                    label       => { type => 'string',  description => 'フォルダ名（100文字以内）' },
+                    basename    => { type => 'string',  description => 'URL パス用 basename（省略時は自動生成）' },
+                    parent_id   => { type => 'integer', description => '親フォルダID（省略時はトップレベル）' },
+                    description => { type => 'string',  description => '説明' },
+                },
+            },
+        },
+        {
+            name        => 'folder_update',
+            description => 'フォルダを更新する。指定したフィールドのみ上書き（最低1つ必要）。親を自分の子孫にするとエラー。',
+            inputSchema => {
+                type     => 'object',
+                required => ['folder_id'],
+                properties => {
+                    folder_id   => { type => 'integer', description => 'フォルダID' },
+                    label       => { type => 'string',  description => '新しいフォルダ名（100文字以内）' },
+                    basename    => { type => 'string',  description => '新しい basename' },
+                    parent_id   => { type => 'integer', description => '新しい親フォルダID。0 でトップレベル' },
+                    description => { type => 'string',  description => '新しい説明' },
+                },
+            },
+        },
+        {
+            name        => 'folder_delete',
+            description => 'フォルダを削除する。取り消せない。配下の固定ページは親フォルダ（なければルート）へ移る。子フォルダは親へ繰り上がる。',
+            inputSchema => {
+                type     => 'object',
+                required => ['folder_id'],
+                properties => {
+                    folder_id => { type => 'integer', description => '削除するフォルダのID' },
+                },
+            },
+        },
+
         {
             name        => 'asset_list',
             description => '指定ブログのアセット（画像・ファイルなど）一覧を取得する。',
