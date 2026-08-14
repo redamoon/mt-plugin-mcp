@@ -4,11 +4,7 @@ use warnings;
 use MT::Entry;
 use MT::Placement;
 use MTMCP::Perm;
-
-# キーワード検索時にPerl側でスキャンする最大件数。DB側でのLIKE検索ではなく
-# 直近のレコードをこの件数までロードしてから絞り込むため、これを超えて
-# 古いレコードにしかマッチしないキーワードは検出できない（既知の制約）。
-use constant KEYWORD_SCAN_LIMIT => 2000;
+use MTMCP::Search;
 
 sub list {
     my ($app, $args) = @_;
@@ -22,24 +18,14 @@ sub list {
     $terms{status} = MT::Entry::RELEASE() if $status eq 'publish';
     $terms{status} = MT::Entry::HOLD()    if $status eq 'draft';
 
-    my %load_opts = ( sort => 'authored_on', direction => 'descend' );
-    if ($keyword) {
-        $load_opts{limit} = KEYWORD_SCAN_LIMIT;
-    } else {
-        $load_opts{limit}  = $limit;
-        $load_opts{offset} = $offset;
-    }
-
-    my @entries = MT::Entry->load(\%terms, \%load_opts);
-
-    if ($keyword) {
-        my $kw = lc $keyword;
-        @entries = grep {
-            index(lc($_->title // ''), $kw) >= 0
-                || index(lc($_->text // ''), $kw) >= 0
-        } @entries;
-        @entries = splice(@entries, $offset, $limit);
-    }
+    my %load_opts = (
+        sort      => 'authored_on',
+        direction => 'descend',
+        limit     => $limit,
+        offset    => $offset,
+    );
+    my $load_terms = MTMCP::Search::and_like_or(\%terms, $keyword, 'title', 'text');
+    my @entries = MT::Entry->load($load_terms, \%load_opts);
 
     return [ map { _to_hash($_) } @entries ];
 }

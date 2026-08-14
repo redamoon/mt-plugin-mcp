@@ -1,8 +1,6 @@
-package MT::Template;
+package MT::Asset;
 use strict;
 use warnings;
-
-# MTMCP::Tools::Template / Widget / TemplateMap の単体テスト用スタブ。
 
 our %STORE;
 our $NEXT_ID = 1;
@@ -23,17 +21,16 @@ sub reset {
 sub new {
     my $class = shift;
     bless {
-        id              => undef,
-        blog_id         => undef,
-        name            => undef,
-        type            => undef,
-        text            => undef,
-        outfile         => undef,
-        identifier      => undef,
-        build_type      => undef,
-        rebuild_me      => undef,
-        modulesets      => undef,
-        content_type_id => undef,
+        id         => undef,
+        blog_id    => undef,
+        label      => undef,
+        file_name  => undef,
+        class      => 'file',
+        created_on => undef,
+        file_path  => undef,
+        mime_type  => undef,
+        file_size  => undef,
+        url        => '',
     }, $class;
 }
 
@@ -57,11 +54,8 @@ sub load {
             if (exists $base->{blog_id}) {
                 @objs = grep { defined $_->blog_id && $_->blog_id == $base->{blog_id} } @objs;
             }
-            if (exists $base->{type}) {
-                @objs = grep { ($_->type // '') eq $base->{type} } @objs;
-            }
-            if (exists $base->{name} && !ref $base->{name}) {
-                @objs = grep { ($_->name // '') eq $base->{name} } @objs;
+            if (exists $base->{class}) {
+                @objs = grep { ($_->class // '') eq $base->{class} } @objs;
             }
         }
     }
@@ -72,16 +66,14 @@ sub load {
         if (exists $terms->{blog_id}) {
             @objs = grep { defined $_->blog_id && $_->blog_id == $terms->{blog_id} } @objs;
         }
-        if (exists $terms->{type}) {
-            @objs = grep { ($_->type // '') eq $terms->{type} } @objs;
-        }
-        if (exists $terms->{name}) {
-            @objs = grep { ($_->name // '') eq $terms->{name} } @objs;
+        if (exists $terms->{class}) {
+            @objs = grep { ($_->class // '') eq $terms->{class} } @objs;
         }
     }
 
-    if ($args && $args->{sort} && $args->{sort} eq 'name') {
-        @objs = sort { ($a->name // '') cmp ($b->name // '') } @objs;
+    if ($args && $args->{sort}) {
+        my $field = $args->{sort};
+        @objs = sort { ($a->$field // '') cmp ($b->$field // '') } @objs;
         @objs = reverse @objs if ($args->{direction} // '') eq 'descend';
     }
     if ($args && $args->{offset}) {
@@ -98,26 +90,7 @@ sub load {
 
 sub save {
     my $self = shift;
-    if (($self->type // '') eq 'widgetset') {
-        return $self->save_widgetset;
-    }
     $self->{id} = $NEXT_ID++ unless defined $self->{id};
-    $STORE{ $self->{id} } = $self;
-    push @SAVED, $self;
-    return 1;
-}
-
-sub save_widgetset {
-    my $self = shift;
-    $self->{id} = $NEXT_ID++ unless defined $self->{id};
-    my $ids = $self->modulesets // '';
-    my @parts;
-    for my $wid (grep { $_ ne '' } split /,/, $ids) {
-        my $w = MT::Template->load($wid);
-        my $name = $w ? ($w->name // $wid) : $wid;
-        push @parts, qq{<mt:include widget="$name">};
-    }
-    $self->text(join "\n", @parts);
     $STORE{ $self->{id} } = $self;
     push @SAVED, $self;
     return 1;
@@ -130,24 +103,11 @@ sub remove {
     return 1;
 }
 
-sub context {
-    return MT::Template::_Context->new;
-}
-
-sub build {
-    my ($self, $ctx) = @_;
-    my $entry = $ctx && $ctx->stash('entry');
-    my $title = $entry ? ($entry->title // '') : '';
-    return ($self->text // '') . $title;
-}
-
 sub errstr { 'stub error' }
-
-sub compile { 1 }
-sub errors  { [] }
+sub url    { $_[0]->{url} }
 
 for my $field (
-    qw(id blog_id name type text outfile identifier build_type rebuild_me modulesets content_type_id)
+    qw(id blog_id label file_name class created_on file_path mime_type file_size)
     )
 {
     no strict 'refs';
@@ -156,14 +116,6 @@ for my $field (
         $self->{$field} = shift if @_;
         return $self->{$field};
     };
-}
-
-package MT::Template::_Context;
-sub new { bless { stash => {} }, shift }
-sub stash {
-    my ($self, $key, $val) = @_;
-    $self->{stash}{$key} = $val if @_ > 2;
-    return $self->{stash}{$key};
 }
 
 1;

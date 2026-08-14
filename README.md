@@ -10,7 +10,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | ツール名 | 説明 |
 |---|---|
 | `blog_list` | ブログ（サイト）一覧取得 |
-| `entry_list` | 記事一覧取得（`keyword` 部分一致検索・`offset` ページネーション対応） |
+| `entry_list` | 記事一覧取得（`keyword` は DB 側 LIKE の部分一致・`offset` ページネーション対応） |
 | `entry_get` | 記事1件取得（本文含む） |
 | `entry_create` | 記事作成（デフォルト: 下書き） |
 | `entry_update` | 記事更新 |
@@ -33,12 +33,12 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 
 | ツール名 | 説明 |
 |---|---|
-| `asset_list` | アセット一覧取得（`keyword` 部分一致検索・`offset` ページネーション対応） |
+| `asset_list` | アセット一覧取得（`keyword` は DB 側 LIKE の部分一致・`offset` ページネーション対応） |
 | `asset_get` | アセット1件取得 |
 | `asset_upload` | ファイルアップロード（Base64）による新規アセット作成 |
 | `asset_delete` | アセット削除 |
 | `asset_thumbnail` | 画像アセットのサムネイルURL取得（MTの動的リサイズ機能を利用） |
-| `template_list` | テンプレート一覧取得（`keyword` 部分一致検索・`offset` ページネーション対応） |
+| `template_list` | テンプレート一覧取得（`keyword` は DB 側 LIKE の部分一致・`offset` ページネーション対応） |
 | `template_get` | テンプレート1件取得（本文・出力ファイル名・識別子・公開方法含む） |
 | `template_create` | テンプレート新規作成（保存前に構文を自動検証） |
 | `template_update` | テンプレート更新（本文・名前・タイプ・出力設定を部分更新、保存前に構文を自動検証） |
@@ -79,7 +79,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `content_type_list` | コンテンツタイプ一覧取得 |
 | `content_type_get` | コンテンツタイプ詳細取得（フィールド定義含む） |
 | `content_type_create` | コンテンツタイプ新規作成 |
-| `content_data_list` | コンテンツデータ一覧取得（`keyword` 部分一致検索・`offset` ページネーション対応） |
+| `content_data_list` | コンテンツデータ一覧取得（`keyword` は DB 側 LIKE の部分一致・`offset` ページネーション対応） |
 | `content_data_get` | コンテンツデータ1件取得（フィールド値・ラベル含む） |
 | `content_data_create` | コンテンツデータ作成 |
 | `content_data_update` | コンテンツデータ更新（部分更新対応） |

@@ -14,6 +14,7 @@ our $NEXT_ID = 1;
 our @SAVED;
 our @REMOVED;
 our $LAST_LOAD_TERMS;
+our $LAST_LOAD_ARGS;
 
 sub reset {
     %STORE           = ();
@@ -21,6 +22,7 @@ sub reset {
     @SAVED           = ();
     @REMOVED         = ();
     $LAST_LOAD_TERMS = undef;
+    $LAST_LOAD_ARGS  = undef;
 }
 
 sub new {
@@ -49,6 +51,7 @@ sub exist {
 sub load {
     my ($class, $terms, $args) = @_;
     $LAST_LOAD_TERMS = $terms;
+    $LAST_LOAD_ARGS  = $args;
 
     my @objs = values %STORE;
 
@@ -58,6 +61,26 @@ sub load {
     elsif (!ref $terms) {
         # スカラー引数 = lookup。class フィルタなし。
         @objs = grep { defined $_->id && $_->id == $terms } @objs;
+    }
+    elsif (ref $terms eq 'ARRAY') {
+        # nested -and/-or terms。単体テストは terms の記録だけで足りる。
+        # クラッシュせず HASH 相当の base 条件だけ適用する。
+        my ($base) = grep { ref $_ eq 'HASH' } @$terms;
+        if ($base) {
+            if (exists $base->{id}) {
+                @objs = grep { defined $_->id && $_->id == $base->{id} } @objs;
+            }
+            if (exists $base->{class}) {
+                my $want = $base->{class};
+                @objs = grep { ($_->class // '') eq $want } @objs;
+            }
+            if (exists $base->{blog_id}) {
+                @objs = grep { defined $_->blog_id && $_->blog_id == $base->{blog_id} } @objs;
+            }
+            if (exists $base->{status}) {
+                @objs = grep { defined $_->status && $_->status == $base->{status} } @objs;
+            }
+        }
     }
     elsif (ref $terms eq 'HASH') {
         if (exists $terms->{id}) {
