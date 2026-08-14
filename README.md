@@ -307,7 +307,7 @@ plugins/MTMCP/
         │   └── Authorize.pm  # OAuth 認可エンドポイント（consent画面）
         └── Tools/
             ├── Blog.pm         # blog_list
-            ├── Entry.pm        # entry_list / get / create / update / delete / preview / export
+            ├── Entry.pm        # entry_list / get / create / update / delete / preview / export / import
             ├── Page.pm         # page_list / get / create / update / delete / preview
             ├── Folder.pm       # folder_list / get / create / update / delete
             ├── Category.pm     # category_list / get / create / update / delete / permutate

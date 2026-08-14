@@ -10,6 +10,7 @@ use MTMCP::Search;
 
 use constant PREVIEW_MAX_CHARS => 100_000;
 use constant EXPORT_MAX_CHARS  => 100_000;
+use constant IMPORT_MAX_BYTES  => 1_000_000;
 
 sub list {
     my ($app, $args) = @_;
@@ -316,6 +317,165 @@ sub _export_date {
     }
     return $ts;
 }
+
+sub import_entries {
+    my ($app, $args) = @_;
+    my $blog_id = $args->{blog_id} or die "blog_id is required\n";
+    MTMCP::Perm::require_blog_permission($app, $blog_id, 'import_blog', 'ブログのインポート');
+
+    die "ImportPath は使えません。MT 形式の本文を body に渡してください\n"
+        if exists $args->{import_path} || exists $args->{ImportPath} || exists $args->{file};
+
+    die "confirm: true が必要です（記事を一括作成する破壊的操作です）\n"
+        unless _is_true($args->{confirm});
+
+    if (exists $args->{import_as_me} && !_is_true($args->{import_as_me})) {
+        die "import_as_me は常に有効です（ユーザー新規作成はしません）\n";
+    }
+
+    my $body = $args->{body};
+    die "body is required\n" if !defined $body || $body eq '';
+
+    my $bytes = $body;
+    utf8::encode($bytes) if utf8::is_utf8($bytes);
+    die "body exceeds 1MB limit\n" if length($bytes) > IMPORT_MAX_BYTES;
+
+    my $default_status = $args->{default_status} // 'draft';
+    die "Unknown default_status: $default_status\n"
+        unless $default_status eq 'draft' || $default_status eq 'publish';
+    my $status_id = $default_status eq 'publish' ? MT::Entry::RELEASE() : MT::Entry::HOLD();
+
+    my $user = eval { $app->user };
+    die "認証されていないため、この操作を行えません\n"
+        unless $user && defined $user->id;
+    my $author_id = $user->id;
+
+    my @parsed = _parse_mt_export($body);
+    die "importable entries not found\n" unless @parsed;
+
+    my @ids;
+    for my $item (@parsed) {
+        my $entry = MT::Entry->new;
+        $entry->blog_id($blog_id);
+        $entry->class('entry');
+        $entry->title($item->{title});
+        $entry->text($item->{body} // '');
+        $entry->text_more($item->{more})     if defined $item->{more};
+        $entry->excerpt($item->{excerpt})    if defined $item->{excerpt};
+        $entry->basename($item->{basename})  if defined $item->{basename} && $item->{basename} ne '';
+        $entry->status($status_id);
+        $entry->author_id($author_id);
+        $entry->authored_on($item->{authored_on}) if $item->{authored_on};
+        $entry->save or die $entry->errstr . "\n";
+
+        if ($item->{categories} && @{ $item->{categories} }) {
+            require MT::Category;
+            my @cat_ids;
+            my %seen;
+            for my $label (@{ $item->{categories} }) {
+                my $cat = MT::Category->load({
+                    blog_id => $blog_id,
+                    label   => $label,
+                    class   => 'category',
+                }) or next;
+                next if $seen{ $cat->id }++;
+                push @cat_ids, $cat->id;
+            }
+            _set_categories($entry, \@cat_ids) if @cat_ids;
+        }
+        push @ids, $entry->id;
+    }
+
+    return {
+        imported     => scalar @ids,
+        entry_ids    => \@ids,
+        status       => 'imported',
+        rebuilt      => JSON::false,
+        import_as_me => JSON::true,
+    };
+}
+
+sub _is_true {
+    my ($v) = @_;
+    return 0 unless defined $v;
+    return 0 if !$v;
+    return 0 if !ref($v) && lc($v) eq 'false';
+    return 1;
+}
+
+sub _parse_mt_export {
+    my ($text) = @_;
+    my @chunks = split /(?m)^--------[ \t]*\n?/, $text;
+    my @entries;
+    for my $chunk (@chunks) {
+        next if !defined $chunk || $chunk =~ /\A\s*\z/;
+        my @lines = split /\n/, $chunk, -1;
+        my %item;
+        my @categories;
+        my $i = 0;
+        while ($i < @lines) {
+            my $line = $lines[$i];
+            last if $line eq '-----';
+            if ($line =~ /^(TITLE|BASENAME|STATUS|DATE|AUTHOR|PRIMARY CATEGORY|CATEGORY):\s*(.*)\z/) {
+                my ($k, $v) = ($1, $2);
+                $item{title}    = $v if $k eq 'TITLE';
+                $item{basename} = $v if $k eq 'BASENAME';
+                $item{authored_on} = _parse_import_date($v) if $k eq 'DATE';
+                if ($k eq 'PRIMARY CATEGORY' || $k eq 'CATEGORY') {
+                    push @categories, $v if defined $v && $v ne '';
+                }
+            }
+            $i++;
+        }
+        next unless defined $item{title} && $item{title} ne '';
+
+        my $section;
+        my @buf;
+        my $flush = sub {
+            return unless $section;
+            my $val = join("\n", @buf);
+            $val =~ s/\n+\z//;
+            $item{body}    = $val if $section eq 'BODY';
+            $item{more}    = $val if $section eq 'EXTENDED BODY';
+            $item{excerpt} = $val if $section eq 'EXCERPT';
+            $section = undef;
+            @buf     = ();
+        };
+        while ($i < @lines) {
+            my $line = $lines[$i];
+            if ($line eq '-----') {
+                $flush->();
+                $i++;
+                next;
+            }
+            if (!defined $section && $line =~ /^(BODY|EXTENDED BODY|EXCERPT|KEYWORDS):\s*\z/) {
+                $section = $1;
+                $i++;
+                next;
+            }
+            push @buf, $line if $section;
+            $i++;
+        }
+        $flush->();
+        $item{categories} = \@categories if @categories;
+        push @entries, \%item;
+    }
+    return @entries;
+}
+
+sub _parse_import_date {
+    my ($s) = @_;
+    return unless defined $s && $s ne '';
+    if ($s =~ m{\A(\d{2})/(\d{2})/(\d{4}) (\d{2}):(\d{2}):(\d{2}) (AM|PM)\z}) {
+        my ($mo, $d, $y, $h, $mi, $se, $ap) = ($1, $2, $3, $4, $5, $6, $7);
+        $h = 0 if $ap eq 'AM' && $h == 12;
+        $h += 12 if $ap eq 'PM' && $h != 12;
+        return sprintf('%04d%02d%02d%02d%02d%02d', $y, $mo, $d, $h, $mi, $se);
+    }
+    return $s if $s =~ /\A\d{14}\z/;
+    return;
+}
+
 
 sub _stash_preview_categories {
     my ( $entry, $cat_ids ) = @_;

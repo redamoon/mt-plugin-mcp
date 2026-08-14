@@ -17,6 +17,7 @@ Movable Type 9 用 MCP サーバーが公開するツールの一覧と、権限
 | `entry_delete` | 記事削除（`DeleteFilesAtRebuild` が無効なら公開 HTML が残ることがある） |
 | `entry_preview` | 記事を Individual アーカイブとしてビルド（ファイルは書き出さない。`entry_create` 前の見た目確認） |
 | `entry_export` | 記事1件を MT Import/Export テキストで返す（`entry_id` 必須。Page 不可。文字数打ち切り。バックアップ代替ではない） |
+| `entry_import` | 記事を一括作成する破壊的操作（`confirm: true` 必須。著者は呼び出しユーザー。省略時は下書き。再構築しない。1MB まで） |
 | `page_list` | 固定ページ一覧（`folder_id` で絞り込み可） |
 | `page_get` | 固定ページ1件取得（本文含む） |
 | `page_create` | 固定ページ作成（デフォルト: 下書き。フォルダは `folder_id` 単数） |
@@ -105,7 +106,7 @@ Movable Type 9 用 MCP サーバーが公開するツールの一覧と、権限
 
 > `user_*` は MT の **「ユーザーとグループの管理」**（`can_manage_users_groups`）が必要です。ブログ編集者トークンではすべて権限エラーになります。サイトへのロール付与・剥奪（grant/revoke）はありません。パスワードの直接変更は `user_recover_password` を使います。作成ユーザーに `system_permissions` は付きません。
 >
-> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` / `templatemap_*` の書き込み / `widgetset_*` の書き込みは **「テンプレートの編集」権限**（`edit_templates`）を必要とします。`page_*` は **「ページの管理」権限**（`manage_pages`）を必要とします。`folder_create` / `folder_update` は `save_folder`、`folder_delete` は `delete_folder`（いずれも `manage_pages` に含まれます）。`entry_preview` は **「記事の作成」権限**（`create_post`）を必要とします。`entry_export` は **「ブログのエクスポート」権限**（`export_blog`）を必要とします（サイトバックアップや移行一括投入の代替ではありません）。記事カテゴリの `category_create` / `category_update` は `save_category`、`category_delete` は `delete_category`、`category_permutate` は `edit_categories`。セット内カテゴリの作成・更新は `save_catefory_set_category`（MT コアの綴り）、削除と `category_set_*` / セットの `category_permutate` は `manage_category_set`。記事カテゴリの変更は公開ファイルを自動再構築しないため、カテゴリアーカイブを出す場合は `rebuild_site` に `archive_type: Category` を指定する。フォルダ操作は `folder_*`（別ツール）。
+> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` / `templatemap_*` の書き込み / `widgetset_*` の書き込みは **「テンプレートの編集」権限**（`edit_templates`）を必要とします。`page_*` は **「ページの管理」権限**（`manage_pages`）を必要とします。`folder_create` / `folder_update` は `save_folder`、`folder_delete` は `delete_folder`（いずれも `manage_pages` に含まれます）。`entry_preview` は **「記事の作成」権限**（`create_post`）を必要とします。`entry_export` は **「ブログのエクスポート」権限**（`export_blog`）、`entry_import` は **「ブログのインポート」権限**（`import_blog`）を必要とします（サイトバックアップや移行一括投入の代替ではありません）。記事カテゴリの `category_create` / `category_update` は `save_category`、`category_delete` は `delete_category`、`category_permutate` は `edit_categories`。セット内カテゴリの作成・更新は `save_catefory_set_category`（MT コアの綴り）、削除と `category_set_*` / セットの `category_permutate` は `manage_category_set`。記事カテゴリの変更は公開ファイルを自動再構築しないため、カテゴリアーカイブを出す場合は `rebuild_site` に `archive_type: Category` を指定する。フォルダ操作は `folder_*`（別ツール）。
 
 >
 > **記事の `category_ids` にはカテゴリセット内のカテゴリを渡さないこと。** 記事カテゴリは `category_set_id` が 0 のものだけです。セットはコンテンツタイプの `categories` フィールドから参照します。
@@ -127,6 +128,8 @@ Movable Type 9 用 MCP サーバーが公開するツールの一覧と、権限
 | `content_data_update` | コンテンツデータ更新（部分更新対応） |
 | `content_data_delete` | コンテンツデータ削除 |
 
+> `entry_import` は記事を一括作成する破壊的操作です。`confirm: true` が無いと実行しません。
+>
 > 削除系ツール（`entry_delete` / `page_delete` / `folder_delete` / `category_delete` / `category_set_delete` / `asset_delete` / `template_delete` / `templatemap_delete` / `widgetset_delete` / `content_data_delete` / `user_delete`）は取り消せない操作です。AI が実行する前に対象を一覧・取得系ツールで確認するよう促してください。
 
 ## 権限と注意
