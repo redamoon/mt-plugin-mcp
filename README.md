@@ -22,7 +22,9 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `page_delete` | 固定ページ削除 |
 | `page_preview` | 固定ページを Page アーカイブとしてビルド（ファイルは書き出さない） |
 | `category_list` | カテゴリ一覧取得 |
-| `tag_list` | タグ一覧取得 |
+| `tag_list` | タグ一覧取得（記事・ページ・アセット・コンテンツデータ） |
+| `tag_rename` | サイト内のタグ名変更（取り消せない。他サイト利用時は clone＋付け替え） |
+| `tag_delete` | サイトからタグを外す（取り消せない。関連オブジェクトから外れる） |
 | `folder_list` | フォルダ一覧取得（固定ページ用。記事カテゴリとは別） |
 | `folder_get` | フォルダ1件取得 |
 | `folder_create` | フォルダ作成 |
@@ -522,7 +524,8 @@ plugins/MTMCP/
             ├── Entry.pm        # entry_list / get / create / update / delete
             ├── Page.pm         # page_list / get / create / update / delete / preview
             ├── Folder.pm       # folder_list / get / create / update / delete
-            ├── Category.pm     # category_list / tag_list
+            ├── Category.pm     # category_list
+            ├── Tag.pm          # tag_list / rename / delete
             ├── Asset.pm        # asset_list / get / upload / delete / thumbnail
             ├── Template.pm     # template_list / get / create / update / delete / validate / preview / tag_list
             ├── TemplateMap.pm  # templatemap_list / get / create / update / delete

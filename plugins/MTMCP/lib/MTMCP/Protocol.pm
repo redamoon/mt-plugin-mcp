@@ -22,7 +22,9 @@ my %TOOL_HANDLERS = (
     'page_delete'     => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::remove(@_)       },
     'page_preview'    => sub { require MTMCP::Tools::Page;     MTMCP::Tools::Page::preview(@_)      },
     'category_list'   => sub { require MTMCP::Tools::Category; MTMCP::Tools::Category::list(@_)     },
-    'tag_list'        => sub { require MTMCP::Tools::Category; MTMCP::Tools::Category::list_tags(@_)},
+    'tag_list'        => sub { require MTMCP::Tools::Tag;      MTMCP::Tools::Tag::list(@_)         },
+    'tag_rename'      => sub { require MTMCP::Tools::Tag;      MTMCP::Tools::Tag::rename(@_)       },
+    'tag_delete'      => sub { require MTMCP::Tools::Tag;      MTMCP::Tools::Tag::remove(@_)       },
     'folder_list'     => sub { require MTMCP::Tools::Folder;   MTMCP::Tools::Folder::list(@_)       },
     'folder_get'      => sub { require MTMCP::Tools::Folder;   MTMCP::Tools::Folder::get(@_)        },
     'folder_create'   => sub { require MTMCP::Tools::Folder;   MTMCP::Tools::Folder::create(@_)     },
@@ -290,12 +292,37 @@ sub _tool_definitions {
         },
         {
             name        => 'tag_list',
-            description => '指定ブログで使われているタグ一覧を取得する。',
+            description => '指定ブログで使われているタグ一覧を取得する。記事・ページ・アセット・コンテンツデータの ObjectTag を対象にする。正規化専用レコードは除く。',
             inputSchema => {
                 type     => 'object',
                 required => ['blog_id'],
                 properties => {
                     blog_id => { type => 'integer', description => 'ブログID' },
+                },
+            },
+        },
+        {
+            name        => 'tag_rename',
+            description => '指定サイト内のタグ名を変更する。取り消せない操作なので、実行前に tag_list で対象を確認すること。記事・ページ・アセット・コンテンツデータのタグが対象。他サイトで同じタグが使われている場合はサイト内だけ付け替え、他サイトは旧名のまま。同名タグへマージすることがある。公開ファイルは自動再構築しない（必要なら rebuild_entry / rebuild_site）。権限はタグの名前変更（rename_tag）とタグの編集（edit_tags）。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id', 'tag_id', 'name'],
+                properties => {
+                    blog_id => { type => 'integer', description => 'ブログID' },
+                    tag_id  => { type => 'integer', description => '変更するタグのID（tag_list で確認）' },
+                    name    => { type => 'string',  description => '新しいタグ名' },
+                },
+            },
+        },
+        {
+            name        => 'tag_delete',
+            description => '指定サイトからタグを外す。取り消せない操作なので、実行前に対象のタグを確認すること。関連する記事・ページ・アセット・コンテンツデータから外れる。他サイトで使われていればタグマスタは残る。公開ファイルは自動再構築しない。権限はタグの削除（remove_tag）。',
+            inputSchema => {
+                type     => 'object',
+                required => ['blog_id', 'tag_id'],
+                properties => {
+                    blog_id => { type => 'integer', description => 'ブログID' },
+                    tag_id  => { type => 'integer', description => '外すタグのID（tag_list で確認）' },
                 },
             },
         },
