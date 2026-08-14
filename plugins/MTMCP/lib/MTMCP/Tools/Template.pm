@@ -47,6 +47,7 @@ sub create {
 
     my $body = $args->{body} // '';
     _assert_valid($blog_id, $body, $type, $args->{skip_validation});
+    _assert_outfile($type, $args->{outfile}, $args->{build_type});
 
     my $tmpl = MT::Template->new;
     $tmpl->blog_id($blog_id);
@@ -111,6 +112,16 @@ sub update {
         _assert_valid($tmpl->blog_id, $args->{body}, $args->{type} // $tmpl->type, $args->{skip_validation});
         $tmpl->text($args->{body});
     }
+    # 出力先に関わる項目を触るときだけ検証する。既存の不備なテンプレートに対して
+    # 本文だけを直したいケースまで弾いてしまわないようにするため。
+    if (grep { exists $args->{$_} } qw(type outfile build_type)) {
+        _assert_outfile(
+            $args->{type}       // $tmpl->type,
+            exists $args->{outfile}    ? $args->{outfile}    : $tmpl->outfile,
+            exists $args->{build_type} ? $args->{build_type} : $tmpl->build_type,
+        );
+    }
+
     $tmpl->name($args->{name}) if defined $args->{name};
     $tmpl->type($args->{type}) if defined $args->{type};
     _apply_optional_columns($tmpl, $args);
@@ -314,6 +325,27 @@ sub _assert_valid {
     } @$errors;
     die "テンプレート構文にエラーがあります。修正してから再度保存してください"
         . "（意図的に保存する場合は skip_validation: true を指定）:\n$detail\n";
+}
+
+# 公開されるインデックステンプレートには出力ファイル名が必須。
+#
+# MT::WeblogPublisher::rebuild_indexes は outfile が空のインデックステンプレートに
+# 当たると、そこでループ全体を中断してエラーを返す。つまり outfile 無しのテンプレートを
+# 1つ作るだけで、以後そのサイトの rebuild_site と rebuild_entry（依存再構築）が
+# すべて失敗するようになる。MT の管理画面では index テンプレートの出力ファイル名は
+# 必須項目なので、この状態は MCP 経由でしか作れない。作成時点で防ぐ。
+#
+# build_type が 0（公開しない）の場合は rebuild_indexes が outfile を見る前に
+# スキップするため、対象外とする。
+sub _assert_outfile {
+    my ($type, $outfile, $build_type) = @_;
+    return unless ($type // '') eq 'index';
+    return if defined $build_type && !$build_type;
+    return if defined $outfile && $outfile ne '';
+    die "インデックステンプレートには outfile（出力ファイル名）が必要です。"
+        . "例: outfile: \"index.html\"。"
+        . "指定しないと、このサイトの rebuild_site / rebuild_entry がすべて失敗するようになります"
+        . "（公開しないテンプレートとして作る場合は build_type: 0 を指定してください）\n";
 }
 
 # create / update で共通して扱う任意カラムを反映する。

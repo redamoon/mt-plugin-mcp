@@ -104,6 +104,7 @@ AI:       blog_list          → blog_id を確認
 - **`template_create` / `template_update` は保存前に必ず構文を検証します。** エラーがあれば保存せず、`<mt:Entries> with no </mt:Entries> on line 12.` のように行番号付きで返します。AI はこのメッセージを読んで自分で修正できます。どうしても検証を通さず保存したい場合のみ `skip_validation: true` を指定してください。
 - **`template_tag_list` はその MT 環境で実際に登録されているタグを返します。** プラグインが追加したタグも含まれるため、AI の学習データに無いタグでも正しく扱えます。素の MT 9 で600件以上あるので `keyword` での絞り込みが前提です。
 - **`template_preview` はファイルを書き出しません。** 公開中のサイトに影響を与えずに出力を確認できます。`individual` など記事コンテキストが必要なテンプレートは `entry_id` を渡してください。
+- **インデックステンプレートには `outfile` が必須です。** MT は出力ファイル名が空のインデックステンプレートを見つけると再構築処理をそこで中断するため、`outfile` の無いテンプレートを1つ作るだけで、そのサイトの `rebuild_site` と `rebuild_entry` がすべて失敗するようになります。これを防ぐため `template_create` / `template_update` が作成時点で弾きます（公開しないテンプレートとして作る場合は `build_type: 0` を指定してください）。
 - **保存しただけでは公開ファイルは更新されません。** 反映するには `rebuild_template` を実行します。
 
 ### 再構築の範囲を絞る
@@ -527,6 +528,8 @@ tools/
 | アップロードで `File extension not allowed` | 許可されていない拡張子（実行可能ファイルや`.svg`など）を指定した | 許可拡張子（README「asset_uploadの注意点」参照）に変換してからアップロード |
 | Claude Desktopで「有効なMCPサーバー設定ではないため、スキップされました」 | `claude_desktop_config.json` は `type`/`url`/`headers` によるリモートサーバー定義をサポートしていない | アプリのコネクタ設定UIから追加するか、HTTPS未対応のローカル環境なら `tools/claude-desktop-bridge/` のブリッジスクリプトを使う |
 | `テンプレート構文にエラーがあります`（テンプレート保存時） | 本文に閉じ忘れや存在しないタグがある | エラーの行番号を見て修正する。`template_tag_list` で正しいタグ名を確認できる。意図的に保存する場合のみ `skip_validation: true` |
+| `インデックステンプレートには outfile が必要です` | `type: "index"` で `outfile` を指定していない | `outfile: "index.html"` のように出力ファイル名を指定する。公開しないテンプレートなら `build_type: 0` |
+| 再構築が `テンプレート'○○'には出力ファイルの設定がありません` で失敗する | 出力ファイル名が空のインデックステンプレートが既に存在する（本プラグインの旧版やMT側で作成されたもの） | `template_list` で該当テンプレートを探し、`template_update` で `outfile` を設定するか `build_type: 0` にする |
 | `「テンプレートの編集」の権限がありません` | トークンのユーザーに `edit_templates` 権限が無い（`template_create` / `update` / `delete` / `preview` で必要） | MT 側でテンプレート編集権限を持つロールを付与するか、権限のあるユーザーでトークンを再発行 |
 | `「サイトの再構築」の権限がありません` | トークンのユーザーに `rebuild` 権限が無い | MT 側で「サイトの再構築」権限を付与するか、権限のあるユーザーでトークンを再発行 |
 | `rebuild_site` が応答しない・504 になる | 記事数が多くWebサーバーのタイムアウトを超えた | `rebuild_template` / `rebuild_entry` で範囲を絞る、`archive_type` を指定して分割実行する、またはMT管理画面から再構築する |

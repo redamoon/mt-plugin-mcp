@@ -291,6 +291,7 @@ sub _tool_definitions {
             description => '新規テンプレートを作成する。type には index / individual / archive / category / page / widget / custom などを指定する。'
                 . '保存前に MT テンプレート構文を自動検証し、エラーがあれば行番号付きで返して保存を中止する（その場合は本文を修正して再実行すること）。'
                 . '本文を書く前に template_tag_list で使えるタグを確認し、既存テンプレートの書き方を template_get で参考にすると成功しやすい。'
+                . 'type が index のときは outfile（出力ファイル名）も必ず指定すること。'
                 . '作成しただけでは公開ファイルは生成されないため、必要に応じて rebuild_template を実行すること。',
             inputSchema => {
                 type     => 'object',
@@ -300,7 +301,7 @@ sub _tool_definitions {
                     name       => { type => 'string',  description => 'テンプレート名' },
                     type       => { type => 'string',  description => 'テンプレートタイプ（index, individual, archive, category, page, widget, custom など）' },
                     body       => { type => 'string',  description => 'テンプレート本文（MTタグを含む HTML）' },
-                    outfile    => { type => 'string',  description => '出力ファイル名（index系テンプレートで使用。例: index.html）' },
+                    outfile    => { type => 'string',  description => '出力ファイル名（例: index.html）。type が index の場合は必須（build_type: 0 のときを除く）' },
                     identifier => { type => 'string',  description => 'テンプレート識別子（<mt:Include identifier="..."> で参照するための名前）' },
                     build_type => { type => 'integer', enum => [0, 1, 2, 3, 4, 5], description => '公開方法。0=公開しない / 1=すぐに公開（オンデマンド） / 2=手動 / 3=ダイナミック / 4=バックグラウンド / 5=スケジュール。省略時は MT のデフォルト' },
                     rebuild_me => { type => 'boolean', description => 'インデックスの再構築時に一緒に再構築するか（index系テンプレート向け）' },
