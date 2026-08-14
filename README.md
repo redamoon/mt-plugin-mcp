@@ -81,7 +81,30 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `rebuild_content_data` | コンテンツデータ1件を再構築 |
 | `rebuild_site` | ブログ全体を再構築（`archive_type` で範囲を絞り込み可） |
 
+### ログ（読み取り）
+
+| ツール名 | 説明 |
+|---|---|
+| `log_list` | アクティビティログ一覧（`level` / 期間 / `keyword` で絞り込み。`blog_id` 省略または `0` は権限範囲のシステム全体） |
+| `log_get` | ログ1件取得（`metadata` 含む。list では省略） |
+
+> `log_list` / `log_get` は MT の **「ログの閲覧」** 権限が必要です。システム全体は `view_log`、サイト単位は `view_blog_log`（`view_log` があればサイト指定も可）。作成・更新・削除・リセット・エクスポートはありません。
+
+### ユーザー（システム権限）
+
+| ツール名 | 説明 |
+|---|---|
+| `user_list` | ユーザー一覧（コメント投稿者は含まない。`keyword` / `status` / `lockout`） |
+| `user_get` | ユーザー1件取得（パスワードは返さない） |
+| `user_create` | ユーザー作成（作成直後はサイト権限なし。ロールは管理画面） |
+| `user_delete` | ユーザー削除（取り消し不可。自分自身は削除不可） |
+| `user_unlock` | ログイン失敗ロックの解除 |
+| `user_recover_password` | パスワード回復メール送信（新しいパスワードは受け取らない） |
+
+> `user_*` は MT の **「ユーザーとグループの管理」**（`can_manage_users_groups`）が必要です。ブログ編集者トークンではすべて権限エラーになります。サイトへのロール付与・剥奪（grant/revoke）と `user_update` はありません。作成ユーザーに `system_permissions` は付きません。
+>
 > 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` / `templatemap_*` の書き込み / `widgetset_*` の書き込みは **「テンプレートの編集」権限**（`edit_templates`）を必要とします。`page_*` は **「ページの管理」権限**（`manage_pages`）を必要とします。`folder_create` / `folder_update` は `save_folder`、`folder_delete` は `delete_folder`（いずれも `manage_pages` に含まれます）。`entry_preview` は **「記事の作成」権限**（`create_post`）を必要とします。記事カテゴリの `category_create` / `category_update` は `save_category`、`category_delete` は `delete_category`、`category_permutate` は `edit_categories`。セット内カテゴリの作成・更新は `save_catefory_set_category`（MT コアの綴り）、削除と `category_set_*` / セットの `category_permutate` は `manage_category_set`。記事カテゴリの変更は公開ファイルを自動再構築しないため、カテゴリアーカイブを出す場合は `rebuild_site` に `archive_type: Category` を指定する。フォルダ操作は `folder_*`（別ツール）。
+
 >
 > **記事の `category_ids` にはカテゴリセット内のカテゴリを渡さないこと。** 記事カテゴリは `category_set_id` が 0 のものだけです。セットはコンテンツタイプの `categories` フィールドから参照します。
 >
@@ -102,7 +125,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `content_data_update` | コンテンツデータ更新（部分更新対応） |
 | `content_data_delete` | コンテンツデータ削除 |
 
-> 削除系ツール（`entry_delete` / `page_delete` / `folder_delete` / `category_delete` / `category_set_delete` / `asset_delete` / `template_delete` / `templatemap_delete` / `widgetset_delete` / `content_data_delete`）は取り消せない操作です。AI が実行する前に対象を一覧・取得系ツールで確認するよう促してください。
+> 削除系ツール（`entry_delete` / `page_delete` / `folder_delete` / `category_delete` / `category_set_delete` / `asset_delete` / `template_delete` / `templatemap_delete` / `widgetset_delete` / `content_data_delete` / `user_delete`）は取り消せない操作です。AI が実行する前に対象を一覧・取得系ツールで確認するよう促してください。
 
 ### AI の操作フロー
 
@@ -318,7 +341,7 @@ MT 管理画面で **システム > プラグイン > MT MCP Server** を開き�
 
 #### 権限について
 
-各ツールは、トークンに紐づくユーザーがブログへのアクセス権限（MT の Permission）を持っているかを確認します。権限のないブログの記事・アセット・テンプレート・コンテンツデータは操作できません（システム管理者は全ブログを操作可能）。
+各ツールは、トークンに紐づくユーザーがブログへのアクセス権限（MT の Permission）を持っているかを確認します。権限のないブログの記事・アセット・テンプレート・コンテンツデータは操作できません（システム管理者は全ブログを操作可能）。`log_list` / `log_get` はブログアクセスではなく `view_log` / `view_blog_log` を確認します（`blog_id=0` のシステムログも対象）。`user_*` はシステム権限 `can_manage_users_groups` を確認します（ブログ権限の付与・剥奪はできません）。
 
 > 本機能導入前に発行された、ユーザーが紐づかない古い形式のトークンは **401 エラーで拒否されます**（ブログ権限チェックを回避できてしまうため）。古いトークンをお使いの場合は、上記いずれかの方法で新しいトークンを再発行してください。
 
@@ -530,7 +553,7 @@ plugins/MTMCP/
         ├── App.pm          # Data API ハンドラ・トークン検証・SSE
         ├── Auth.pm         # ログインAPI（ユーザー名/パスワード → トークン発行）・失敗ロックアウト
         ├── OAuth.pm        # OAuth 2.1（認可コード + PKCE）トークンエンドポイント・検証ロジック
-        ├── Perm.pm         # ブログ単位の権限チェック
+        ├── Perm.pm         # ブログ単位・システム権限（ログ閲覧・ユーザー管理）のチェック
         ├── Protocol.pm     # MCP JSON-RPC ディスパッチャ
         ├── CMS/
         │   ├── Token.pm      # 管理画面からのトークン発行
@@ -547,6 +570,8 @@ plugins/MTMCP/
             ├── Template.pm     # template_list / get / create / update / delete / validate / preview / tag_list
             ├── TemplateMap.pm  # templatemap_list / get / create / update / delete
             ├── Widget.pm       # widgetset_* / widget_list
+            ├── Log.pm          # log_list / log_get
+            ├── User.pm         # user_list / get / create / delete / unlock / recover_password
             ├── Rebuild.pm      # rebuild_template / entry / page / content_data / site
             ├── ContentType.pm  # content_type_list / get / create
             └── ContentData.pm  # content_data_list / get / create / update / delete

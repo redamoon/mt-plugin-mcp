@@ -1,6 +1,7 @@
 package MTMCP::Perm;
 use strict;
 use warnings;
+use utf8;
 
 # $app->user に紐づくユーザーが指定ブログへのアクセス権限を持つか検証する。
 # 権限のないユーザーが他ブログのデータを操作するのを防ぐ。
@@ -43,6 +44,55 @@ sub require_blog_permission {
     die "「$label」の権限がありません（blog_id: $blog_id）\n"
         unless $perm && $perm->can_do($action);
     return;
+}
+
+# アクティビティログ閲覧。require_blog_access は blog_id=0 を拒否するため使わない。
+# 戻り値:
+#   undef … 追加の blog_id 制限なし（superuser / view_log）
+#   [blog_id, ...] … システム全体要求時、view_blog_log のあるサイトに限定
+sub require_log_view {
+    my ($app, $blog_id) = @_;
+
+    my $user = eval { $app->user };
+    die "認証されていないため、この操作を行えません\n" unless $user;
+    return if $user->is_superuser;
+
+    require MT::Permission;
+
+    my $has_view_log = 0;
+    my $sys_perm = MT::Permission->load({ author_id => $user->id, blog_id => 0 });
+    $has_view_log = 1 if $sys_perm && $sys_perm->can_do('view_log');
+
+    if ($blog_id) {
+        return if $has_view_log;
+        my $perm = MT::Permission->load({ author_id => $user->id, blog_id => $blog_id });
+        die "この操作を行う権限がありません（blog_id: $blog_id）\n"
+            unless $perm && $perm->can_do('view_blog_log');
+        return;
+    }
+
+    # blog_id が 0 / undef: システム全体（権限のある範囲）
+    return if $has_view_log;
+
+    my @perms = MT::Permission->load({ author_id => $user->id });
+    my @blog_ids;
+    for my $perm (@perms) {
+        next unless $perm->blog_id;
+        next unless $perm->can_do('view_blog_log');
+        push @blog_ids, $perm->blog_id;
+    }
+    die "この操作を行う権限がありません（blog_id: 0）\n" unless @blog_ids;
+    return \@blog_ids;
+}
+
+# ユーザー管理（システム権限）。ブログ単位の require_blog_access は使わない。
+# can_manage_users_groups は is_superuser を含む（MT::Author）。
+sub require_manage_users {
+    my ($app) = @_;
+    my $user = eval { $app->user };
+    die "認証されていないため、この操作を行えません\n" unless $user;
+    return if $user->can_manage_users_groups;
+    die "ユーザーを管理する権限がありません\n";
 }
 
 1;
