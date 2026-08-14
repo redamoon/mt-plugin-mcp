@@ -22,8 +22,20 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `page_update` | 固定ページ更新（`folder_id: 0` でフォルダ解除） |
 | `page_delete` | 固定ページ削除 |
 | `page_preview` | 固定ページを Page アーカイブとしてビルド（ファイルは書き出さない） |
-| `category_list` | カテゴリ一覧取得 |
-| `tag_list` | タグ一覧取得 |
+| `category_list` | カテゴリ一覧（`category_set_id` 省略時は記事カテゴリ。指定時はセット内） |
+| `category_get` | カテゴリ1件取得（セット内も含む。フォルダは見つからない） |
+| `category_create` | カテゴリ作成（任意の `category_set_id`） |
+| `category_update` | カテゴリ更新 |
+| `category_delete` | カテゴリ削除（取り消せない） |
+| `category_permutate` | カテゴリの表示順変更（当該スコープの全 ID 完全一致） |
+| `category_set_list` | カテゴリセット一覧 |
+| `category_set_get` | カテゴリセット1件取得（配下カテゴリ含む） |
+| `category_set_create` | カテゴリセット作成（サイト内で名前一意） |
+| `category_set_update` | カテゴリセット名の更新（カテゴリ配列は不可） |
+| `category_set_delete` | カテゴリセット削除（配下カテゴリも消える。取り消せない） |
+| `tag_list` | タグ一覧取得（記事・ページ・アセット・コンテンツデータ） |
+| `tag_rename` | サイト内のタグ名変更（取り消せない。他サイト利用時は clone＋付け替え） |
+| `tag_delete` | サイトからタグを外す（取り消せない。関連オブジェクトから外れる） |
 | `folder_list` | フォルダ一覧取得（固定ページ用。記事カテゴリとは別） |
 | `folder_get` | フォルダ1件取得 |
 | `folder_create` | フォルダ作成 |
@@ -69,7 +81,11 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `rebuild_content_data` | コンテンツデータ1件を再構築 |
 | `rebuild_site` | ブログ全体を再構築（`archive_type` で範囲を絞り込み可） |
 
-> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` / `templatemap_*` の書き込み / `widgetset_*` の書き込みは **「テンプレートの編集」権限**（`edit_templates`）を必要とします。`page_*` は **「ページの管理」権限**（`manage_pages`）を必要とします。`folder_create` / `folder_update` は `save_folder`、`folder_delete` は `delete_folder`（いずれも `manage_pages` に含まれます）。`entry_preview` は **「記事の作成」権限**（`create_post`）を必要とします。
+> 再構築系ツールは MT の **「サイトの再構築」権限**（`rebuild`）を必要とします。`template_create` / `template_update` / `template_delete` / `template_preview` / `templatemap_*` の書き込み / `widgetset_*` の書き込みは **「テンプレートの編集」権限**（`edit_templates`）を必要とします。`page_*` は **「ページの管理」権限**（`manage_pages`）を必要とします。`folder_create` / `folder_update` は `save_folder`、`folder_delete` は `delete_folder`（いずれも `manage_pages` に含まれます）。`entry_preview` は **「記事の作成」権限**（`create_post`）を必要とします。記事カテゴリの `category_create` / `category_update` は `save_category`、`category_delete` は `delete_category`、`category_permutate` は `edit_categories`。セット内カテゴリの作成・更新は `save_catefory_set_category`（MT コアの綴り）、削除と `category_set_*` / セットの `category_permutate` は `manage_category_set`。記事カテゴリの変更は公開ファイルを自動再構築しないため、カテゴリアーカイブを出す場合は `rebuild_site` に `archive_type: Category` を指定する。フォルダ操作は `folder_*`（別ツール）。
+>
+> **記事の `category_ids` にはカテゴリセット内のカテゴリを渡さないこと。** 記事カテゴリは `category_set_id` が 0 のものだけです。セットはコンテンツタイプの `categories` フィールドから参照します。
+>
+> **`category_set_delete` は配下カテゴリをまとめて消し、コンテンツタイプのフィールドがセットを参照していてもコアは削除を止めません。** 削除前に `content_type_get` で `category_set_id` の参照を確認してください。`content_type_create` で `type: categories` のフィールドには `category_set_id` が必須です。
 >
 > `template_preview` は任意の本文を MT テンプレートとして評価するため、保存と同等の権限を要求しています。`AllowFileInclude` を有効にしている環境では `<mt:Include file="...">` でサーバー上のファイルを読み出せてしまうためです。構文チェックのみで評価を伴わない `template_validate` はブログへのアクセス権限で実行できます。
 
@@ -86,7 +102,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 | `content_data_update` | コンテンツデータ更新（部分更新対応） |
 | `content_data_delete` | コンテンツデータ削除 |
 
-> 削除系ツール（`entry_delete` / `page_delete` / `folder_delete` / `asset_delete` / `template_delete` / `templatemap_delete` / `widgetset_delete` / `content_data_delete`）は取り消せない操作です。AI が実行する前に対象を一覧・取得系ツールで確認するよう促してください。
+> 削除系ツール（`entry_delete` / `page_delete` / `folder_delete` / `category_delete` / `category_set_delete` / `asset_delete` / `template_delete` / `templatemap_delete` / `widgetset_delete` / `content_data_delete`）は取り消せない操作です。AI が実行する前に対象を一覧・取得系ツールで確認するよう促してください。
 
 ### AI の操作フロー
 
@@ -524,7 +540,9 @@ plugins/MTMCP/
             ├── Entry.pm        # entry_list / get / create / update / delete / preview
             ├── Page.pm         # page_list / get / create / update / delete / preview
             ├── Folder.pm       # folder_list / get / create / update / delete
-            ├── Category.pm     # category_list / tag_list
+            ├── Category.pm     # category_list / get / create / update / delete / permutate
+            ├── CategorySet.pm  # category_set_list / get / create / update / delete
+            ├── Tag.pm          # tag_list / rename / delete
             ├── Asset.pm        # asset_list / get / upload / delete / thumbnail
             ├── Template.pm     # template_list / get / create / update / delete / validate / preview / tag_list
             ├── TemplateMap.pm  # templatemap_list / get / create / update / delete

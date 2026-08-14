@@ -45,15 +45,31 @@ sub create {
     my $data_label_uid;
 
     for my $f (@fields_def) {
+        my $set_id;
+        if (($f->{type} // '') eq 'categories') {
+            $set_id = $f->{category_set_id} // $f->{related_cat_set_id};
+            die "category_set_id is required for categories field\n"
+                unless $set_id;
+        }
+
         my $cf = MT::ContentField->new;
         $cf->blog_id($blog_id);
         $cf->type($f->{type});
         $cf->name($f->{label});
         $cf->required($f->{required} ? 1 : 0);
+        if ($set_id && $cf->can('related_cat_set_id')) {
+            $cf->related_cat_set_id($set_id);
+        }
         $cf->save or die $cf->errstr . "\n";
 
         my $type_label = $registry->{ $f->{type} }{label};
         $type_label = $type_label->() if ref($type_label) eq 'CODE';
+
+        my $options = { label => $f->{label} };
+        if ($set_id) {
+            $options->{category_set_id} = $set_id;
+            $options->{related_cat_set_id} = $set_id;
+        }
 
         push @field_objects, {
             object => $cf,
@@ -63,7 +79,7 @@ sub create {
                 order      => $f->{order} // scalar(@field_objects),
                 type       => $f->{type},
                 type_label => $type_label,
-                options    => { label => $f->{label} },
+                options    => $options,
             },
         };
         $data_label_uid = $cf->unique_id if $f->{label_field};
@@ -105,16 +121,29 @@ sub _to_hash {
             { content_type_id => $ct->id },
             { sort => 'id', direction => 'ascend' },
         );
-        $hash->{fields} = [
-            map {
-                {
-                    id    => $_->id,
-                    type  => $_->type,
-                    label => _field_label($_),
-                }
-            } @fields
-        ];
+        $hash->{fields} = [ map { _field_hash($_) } @fields ];
     }
+    return $hash;
+}
+
+
+sub _field_hash {
+    my ($cf) = @_;
+    my $hash = {
+        id    => $cf->id,
+        type  => $cf->type,
+        label => _field_label($cf),
+    };
+    my $set_id;
+    if ($cf->can('related_cat_set_id') && $cf->related_cat_set_id) {
+        $set_id = $cf->related_cat_set_id;
+    }
+    if (!$set_id) {
+        my $opts = eval { $cf->options } // {};
+        $set_id = $opts->{category_set_id} // $opts->{related_cat_set_id}
+            if ref $opts eq 'HASH';
+    }
+    $hash->{category_set_id} = $set_id if $set_id;
     return $hash;
 }
 

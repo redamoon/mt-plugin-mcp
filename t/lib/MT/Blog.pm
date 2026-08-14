@@ -4,20 +4,23 @@ use warnings;
 
 our %STORE;
 our @FLUSHED;
+our @SAVED;
 
 sub reset {
     %STORE   = ();
     @FLUSHED = ();
+    @SAVED   = ();
 }
 
 sub new {
     my $class = shift;
     bless {
-        id            => undef,
-        name          => 'Test Blog',
-        site_path     => '/tmp/mt-site',
-        archive_type  => '',
-        convert_paras => '__default__',
+        id             => undef,
+        name           => 'Test Blog',
+        site_path      => '/tmp/mt-site',
+        archive_type   => '',
+        convert_paras  => '__default__',
+        category_order => '',
     }, $class;
 }
 
@@ -31,6 +34,15 @@ sub load {
     return $blog;
 }
 
+sub save {
+    my $self = shift;
+    $STORE{ $self->{id} } = $self if defined $self->{id};
+    push @SAVED, $self;
+    return 1;
+}
+
+sub errstr { 'stub error' }
+
 sub flush_has_archive_type_cache {
     my $self = shift;
     push @FLUSHED, $self->id;
@@ -41,7 +53,7 @@ sub publisher {
     return MT::Blog::_Publisher->new;
 }
 
-for my $field (qw(id name site_path archive_type convert_paras)) {
+for my $field (qw(id name site_path archive_type convert_paras category_order)) {
     no strict 'refs';
     *$field = sub {
         my $self = shift;
