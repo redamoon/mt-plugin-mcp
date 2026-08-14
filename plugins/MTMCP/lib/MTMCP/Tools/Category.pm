@@ -14,19 +14,60 @@ sub _load_category {
     return MT::Category->load({ id => $category_id, class => 'category' });
 }
 
-sub _require_article_category {
+sub _require_category {
     my ($category_id) = @_;
     my $cat = _load_category($category_id)
         or die "Category not found: $category_id\n";
-    die "記事カテゴリではありません\n" if $cat->category_set_id;
     return $cat;
 }
 
-sub _reject_category_set_id {
+sub _set_id_from_args {
     my ($args) = @_;
-    return unless exists $args->{category_set_id};
-    die "カテゴリセットのカテゴリはこのツールでは扱えません\n"
-        if $args->{category_set_id};
+    return 0 unless exists $args->{category_set_id} && $args->{category_set_id};
+    return $args->{category_set_id};
+}
+
+sub _is_set_category {
+    my ($cat) = @_;
+    return ( $cat->category_set_id || 0 ) != 0;
+}
+
+sub _require_save_perm {
+    my ($app, $blog_id, $set_id) = @_;
+    if ($set_id) {
+        MTMCP::Perm::require_blog_permission(
+            $app, $blog_id, 'save_catefory_set_category', 'カテゴリセットのカテゴリの管理'
+        );
+    }
+    else {
+        MTMCP::Perm::require_blog_permission(
+            $app, $blog_id, 'save_category', 'カテゴリの管理'
+        );
+    }
+}
+
+sub _require_delete_perm {
+    my ($app, $cat) = @_;
+    if (_is_set_category($cat)) {
+        MTMCP::Perm::require_blog_permission(
+            $app, $cat->blog_id, 'manage_category_set', 'カテゴリセットの管理'
+        );
+    }
+    else {
+        MTMCP::Perm::require_blog_permission(
+            $app, $cat->blog_id, 'delete_category', 'カテゴリの管理'
+        );
+    }
+}
+
+sub _require_set_on_blog {
+    my ($set_id, $blog_id) = @_;
+    require MT::CategorySet;
+    my $set = MT::CategorySet->load({ id => $set_id })
+        or die "CategorySet not found: $set_id\n";
+    die "カテゴリセットは同じブログに属する必要があります\n"
+        unless $set->blog_id == $blog_id;
+    return $set;
 }
 
 sub list {
@@ -34,10 +75,11 @@ sub list {
     my $blog_id = $args->{blog_id} or die "blog_id is required\n";
     MTMCP::Perm::require_blog_access($app, $blog_id);
 
+    my $set_id = _set_id_from_args($args);
     my %terms = (
         blog_id         => $blog_id,
         class           => 'category',
-        category_set_id => 0,
+        category_set_id => $set_id || 0,
     );
     $terms{parent} = $args->{parent_id} || 0 if defined $args->{parent_id};
 
@@ -48,7 +90,7 @@ sub list {
 sub get {
     my ($app, $args) = @_;
     my $category_id = $args->{category_id} or die "category_id is required\n";
-    my $cat = _require_article_category($category_id);
+    my $cat = _require_category($category_id);
     MTMCP::Perm::require_blog_access($app, $cat->blog_id);
     my $hash = _to_hash($cat);
     $hash->{blog_id} = $cat->blog_id;
@@ -60,18 +102,20 @@ sub create {
     my $blog_id = $args->{blog_id} or die "blog_id is required\n";
     my $label   = $args->{label}   or die "label is required\n";
     _assert_label($label);
-    _reject_category_set_id($args);
-    MTMCP::Perm::require_blog_permission($app, $blog_id, 'save_category', 'カテゴリの管理');
+
+    my $set_id = _set_id_from_args($args);
+    _require_set_on_blog($set_id, $blog_id) if $set_id;
+    _require_save_perm($app, $blog_id, $set_id);
 
     my $cat = MT::Category->new;
     $cat->blog_id($blog_id);
     $cat->label($label);
     $cat->description($args->{description}) if defined $args->{description};
     $cat->class('category');
-    $cat->category_set_id(0);
+    $cat->category_set_id($set_id || 0);
 
     if ($args->{parent_id}) {
-        $cat->parent(_resolve_parent($args->{parent_id}, $blog_id, undef));
+        $cat->parent(_resolve_parent($args->{parent_id}, $blog_id, undef, $set_id || 0));
     }
     else {
         $cat->parent(0);
@@ -100,9 +144,8 @@ sub create {
 sub update {
     my ($app, $args) = @_;
     my $category_id = $args->{category_id} or die "category_id is required\n";
-    my $cat = _require_article_category($category_id);
-    _reject_category_set_id($args);
-    MTMCP::Perm::require_blog_permission($app, $cat->blog_id, 'save_category', 'カテゴリの管理');
+    my $cat = _require_category($category_id);
+    _require_save_perm($app, $cat->blog_id, $cat->category_set_id || 0);
 
     my @updatable = qw(label basename parent_id description);
     die "更新する項目がありません（" . join(', ', @updatable) . " のいずれかを指定してください）\n"
@@ -118,7 +161,9 @@ sub update {
 
     if (exists $args->{parent_id}) {
         if ($args->{parent_id}) {
-            $cat->parent(_resolve_parent($args->{parent_id}, $cat->blog_id, $cat));
+            $cat->parent(_resolve_parent(
+                $args->{parent_id}, $cat->blog_id, $cat, $cat->category_set_id || 0
+            ));
         }
         else {
             $cat->parent(0);
@@ -140,8 +185,8 @@ sub update {
 sub remove {
     my ($app, $args) = @_;
     my $category_id = $args->{category_id} or die "category_id is required\n";
-    my $cat = _require_article_category($category_id);
-    MTMCP::Perm::require_blog_permission($app, $cat->blog_id, 'delete_category', 'カテゴリの管理');
+    my $cat = _require_category($category_id);
+    _require_delete_perm($app, $cat);
     my $label = $cat->label;
     eval {
         require MT::CMS::Category;
@@ -156,6 +201,32 @@ sub permutate {
     my $blog_id = $args->{blog_id} or die "blog_id is required\n";
     my $ids     = $args->{category_ids};
     die "category_ids is required\n" unless defined $ids && ref $ids eq 'ARRAY';
+
+    my $set_id = _set_id_from_args($args);
+    my $mismatch = 'category_ids は当該スコープのカテゴリ全件と一致する必要があります。先に category_list で全 ID を取得してください';
+
+    if ($set_id) {
+        MTMCP::Perm::require_blog_permission(
+            $app, $blog_id, 'manage_category_set', 'カテゴリセットの管理'
+        );
+        my $set = _require_set_on_blog($set_id, $blog_id);
+        my @cats = MT::Category->load({
+            blog_id         => $blog_id,
+            class           => 'category',
+            category_set_id => $set_id,
+        });
+        _assert_permutate_ids($ids, \@cats, $mismatch);
+        $set->order(join ',', @$ids);
+        $set->save or die $set->errstr . "\n";
+        return {
+            blog_id         => $blog_id,
+            category_set_id => $set_id,
+            status          => 'permutated',
+            category_ids    => [ @$ids ],
+            category_order  => $set->order,
+        };
+    }
+
     MTMCP::Perm::require_blog_permission($app, $blog_id, 'edit_categories', 'カテゴリの管理');
 
     my @cats = MT::Category->load({
@@ -163,15 +234,7 @@ sub permutate {
         class           => 'category',
         category_set_id => 0,
     });
-    my %scope = map { $_->id => 1 } @cats;
-    my %given;
-    for my $id (@$ids) {
-        die "category_ids は当該ブログの記事カテゴリ全件と一致する必要があります。先に category_list で全 ID を取得してください\n"
-            unless $scope{$id};
-        $given{$id} = 1;
-    }
-    die "category_ids は当該ブログの記事カテゴリ全件と一致する必要があります。先に category_list で全 ID を取得してください\n"
-        unless keys(%given) == keys(%scope) && @$ids == keys(%scope);
+    _assert_permutate_ids($ids, \@cats, $mismatch);
 
     require MT::Blog;
     my $blog = MT::Blog->load($blog_id) or die "Blog not found: $blog_id\n";
@@ -185,6 +248,18 @@ sub permutate {
     };
 }
 
+sub _assert_permutate_ids {
+    my ($ids, $cats, $mismatch) = @_;
+    my %scope = map { $_->id => 1 } @$cats;
+    my %given;
+    for my $id (@$ids) {
+        die "$mismatch\n" unless $scope{$id};
+        $given{$id} = 1;
+    }
+    die "$mismatch\n"
+        unless keys(%given) == keys(%scope) && @$ids == keys(%scope);
+}
+
 sub _assert_label {
     my ($label) = @_;
     die "label は100文字以内である必要があります\n"
@@ -192,10 +267,13 @@ sub _assert_label {
 }
 
 sub _resolve_parent {
-    my ($parent_id, $blog_id, $cat) = @_;
-    my $parent = _require_article_category($parent_id);
-    die "親カテゴリは同じブログの記事カテゴリである必要があります\n"
-        unless $parent->blog_id == $blog_id;
+    my ($parent_id, $blog_id, $cat, $set_id) = @_;
+    $set_id = $cat->category_set_id if $cat && !defined $set_id;
+    $set_id ||= 0;
+    my $parent = _require_category($parent_id);
+    die "親カテゴリは同じブログ・同じカテゴリセットのカテゴリである必要があります\n"
+        unless $parent->blog_id == $blog_id
+        && ( $parent->category_set_id || 0 ) == ( $set_id || 0 );
     if ($cat && defined $cat->id) {
         die "カテゴリ自身を親に指定することはできません\n"
             if $parent->id == $cat->id;
@@ -214,7 +292,7 @@ sub _assert_unique_label {
         parent          => $cat->parent || 0,
         label           => $label,
         class           => 'category',
-        category_set_id => 0,
+        category_set_id => $cat->category_set_id || 0,
     });
     for my $other (@others) {
         next if defined $cat->id && defined $other->id && $other->id == $cat->id;
