@@ -8,6 +8,8 @@ use lib "$FindBin::Bin/../plugins/MTMCP/lib";
 use MTMCP::Tools::Entry;
 use MTMCP::Tools::Rebuild;
 use MT::Blog;
+use MT::Placement;
+use MT::Category;
 
 {
     no warnings 'redefine';
@@ -175,6 +177,46 @@ sub _seed_page {
     my $got = eval { MTMCP::Tools::Entry::remove($app_off, { entry_id => 1 }) };
     ok($got, '無効時も entry_delete は成功') or diag($@);
     is(scalar @MT::Blog::_Publisher::REMOVED_ARCHIVE, 0, 'entry も無効時は公開ファイルを消さない');
+}
+
+# ------------------------------------------------------------------
+# entry_get のカテゴリ解決（バッチロード。folder は現行どおり除外しない）
+# ------------------------------------------------------------------
+
+{
+    MT::Entry::reset();
+    MT::Placement::reset();
+    MT::Category::reset();
+    _seed_entry(id => 1);
+
+    for my $spec ([ 2, 'News', 'category' ], [ 3, 'Tech', 'category' ], [ 4, 'Files', 'folder' ]) {
+        my ($id, $label, $class) = @$spec;
+        my $c = MT::Category->new;
+        $c->id($id);
+        $c->blog_id(1);
+        $c->label($label);
+        $c->class($class);
+        $c->save;
+        my $pl = MT::Placement->new;
+        $pl->entry_id(1);
+        $pl->blog_id(1);
+        $pl->category_id($id);
+        $pl->is_primary($id == 2 ? 1 : 0);
+        $pl->save;
+    }
+    # 参照先が消えている placement は落ちる
+    my $dangling = MT::Placement->new;
+    $dangling->entry_id(1);
+    $dangling->blog_id(1);
+    $dangling->category_id(999);
+    $dangling->save;
+
+    $MT::Category::LOAD_COUNT = 0;
+    my $got = eval { MTMCP::Tools::Entry::get($app, { entry_id => 1 }) };
+    ok($got, 'entry_get は成功する') or diag($@);
+    is($MT::Category::LOAD_COUNT, 1, 'placement 4件でも MT::Category->load は1回');
+    my @labels = sort map { $_->{label} } @{ $got->{categories} };
+    is_deeply(\@labels, [ 'Files', 'News', 'Tech' ], 'entry_get は folder を除外しない（現行互換）');
 }
 
 done_testing;

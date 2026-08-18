@@ -251,4 +251,117 @@ sub _seed_roundtrip {
     ok($got, 'import_blog があれば成功') or diag($@);
 }
 
+# 同じカテゴリラベルの記事を複数インポートしても load 回数が記事数に比例しない。
+{
+    _reset();
+    for my $spec ([ 2, 'News' ], [ 3, 'Tech' ]) {
+        my ($id, $label) = @$spec;
+        my $c = MT::Category->new;
+        $c->id($id);
+        $c->blog_id(1);
+        $c->label($label);
+        $c->class('category');
+        $c->save;
+    }
+
+    my $many = join '', map {
+        my $n = $_;
+        <<"MT";
+TITLE: Bulk $n
+BASENAME: bulk-$n
+STATUS: Publish
+PRIMARY CATEGORY: News
+CATEGORY: News
+CATEGORY: Tech
+-----
+BODY:
+body $n
+-----
+--------
+MT
+    } (1 .. 5);
+
+    $MT::Category::LOAD_COUNT = 0;
+    my $got = MTMCP::Tools::Entry::import_entries(
+        _app(id => 9, is_superuser => 1),
+        { blog_id => 1, body => $many, confirm => 1 },
+    );
+    is($got->{imported}, 5, '5件インポート');
+    is($MT::Category::LOAD_COUNT, 1, '記事5件・ラベル2種でも MT::Category->load は1回');
+    for my $eid (@{ $got->{entry_ids} }) {
+        my @pl = sort { $a->category_id <=> $b->category_id } MT::Placement->load({ entry_id => $eid });
+        is(scalar @pl, 2, "entry $eid に2カテゴリ");
+        is($pl[0]->category_id, 2, "entry $eid の News");
+        is($pl[1]->category_id, 3, "entry $eid の Tech");
+    }
+}
+
+# カテゴリが1件も無いインポートではカテゴリを引かない（遅延ロード）。
+{
+    _reset();
+    my $no_cat = <<'MT';
+TITLE: NoCat
+BASENAME: nocat
+STATUS: Publish
+-----
+BODY:
+plain
+-----
+--------
+MT
+    $MT::Category::LOAD_COUNT = 0;
+    my $got = MTMCP::Tools::Entry::import_entries(
+        _app(id => 9, is_superuser => 1),
+        { blog_id => 1, body => $no_cat, confirm => 1 },
+    );
+    is($got->{imported}, 1, 'カテゴリ無しでもインポートできる');
+    is($MT::Category::LOAD_COUNT, 0, 'カテゴリが無ければ load しない');
+}
+
+# 存在しないラベルは現行どおり黙って落とす。
+{
+    _reset();
+    my $c = MT::Category->new;
+    $c->id(2);
+    $c->blog_id(1);
+    $c->label('News');
+    $c->class('category');
+    $c->save;
+    # 別ブログの同名ラベルは拾わない
+    my $other = MT::Category->new;
+    $other->id(5);
+    $other->blog_id(2);
+    $other->label('Ghost');
+    $other->class('category');
+    $other->save;
+    # folder は category として拾わない
+    my $folder = MT::Category->new;
+    $folder->id(6);
+    $folder->blog_id(1);
+    $folder->label('Files');
+    $folder->class('folder');
+    $folder->save;
+
+    my $body = <<'MT';
+TITLE: Partial
+BASENAME: partial
+STATUS: Publish
+CATEGORY: News
+CATEGORY: Ghost
+CATEGORY: Files
+-----
+BODY:
+b
+-----
+--------
+MT
+    my $got = MTMCP::Tools::Entry::import_entries(
+        _app(id => 9, is_superuser => 1),
+        { blog_id => 1, body => $body, confirm => 1 },
+    );
+    my @pl = MT::Placement->load({ entry_id => $got->{entry_ids}[0] });
+    is(scalar @pl, 1, '同ブログの category だけ付与する');
+    is($pl[0]->category_id, 2, 'News のみ');
+}
+
 done_testing();

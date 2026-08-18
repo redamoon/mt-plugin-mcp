@@ -278,12 +278,11 @@ sub _to_mt_export {
         'DATE: ' . _export_date($entry->authored_on),
     );
 
-    my @placements = eval { MT::Placement->load({ entry_id => $entry->id }) };
-    if (@placements) {
-        require MT::Category;
+    my ($placements, $cat_by_id) = _load_entry_categories($entry->id);
+    if (@$placements) {
         my $primary_done = 0;
-        for my $p (@placements) {
-            my $cat = MT::Category->load($p->category_id) or next;
+        for my $p (@$placements) {
+            my $cat = $cat_by_id->{ $p->category_id // '' } or next;
             my $class = eval { $cat->class } // 'category';
             next if $class eq 'folder';
             my $label = $cat->label // '';
@@ -304,6 +303,34 @@ sub _to_mt_export {
     }
     push @lines, '--------';
     return join("\n", @lines) . "\n";
+}
+
+# 記事1件ぶんの placement と、そこから参照されるカテゴリをまとめて引く。
+# placement 1件ごとに MT::Category->load を撃つと N+1 になるため、
+# category_id を集めてから { id => \@ids }（IN 相当）で1回だけロードする。
+# 返り値は (placements の配列参照, category_id => MT::Category のハッシュ参照)。
+# mt_category は Category と Folder で共有されるが、ID 直指定なので class は絞らない。
+# folder を落とすかどうかは呼び出し側の責務。
+sub _load_entry_categories {
+    my ($entry_id) = @_;
+    my @placements = eval { MT::Placement->load({ entry_id => $entry_id }) };
+    return ([], {}) unless @placements;
+
+    my (@ids, %seen);
+    for my $p (@placements) {
+        my $cid = $p->category_id;
+        next unless defined $cid;
+        next if $seen{$cid}++;
+        push @ids, $cid;
+    }
+    return (\@placements, {}) unless @ids;
+
+    require MT::Category;
+    my %cat_by_id;
+    for my $cat (MT::Category->load({ id => \@ids })) {
+        $cat_by_id{ $cat->id } = $cat;
+    }
+    return (\@placements, \%cat_by_id);
 }
 
 sub _export_date {
@@ -354,6 +381,7 @@ sub import_entries {
     die "importable entries not found\n" unless @parsed;
 
     my @ids;
+    my $cat_id_by_label;    # 最初に categories を持つ item が来たときだけ1回作る
     for my $item (@parsed) {
         my $entry = MT::Entry->new;
         $entry->blog_id($blog_id);
@@ -369,17 +397,14 @@ sub import_entries {
         $entry->save or die $entry->errstr . "\n";
 
         if ($item->{categories} && @{ $item->{categories} }) {
-            require MT::Category;
+            $cat_id_by_label ||= _category_id_by_label($blog_id);
             my @cat_ids;
             my %seen;
             for my $label (@{ $item->{categories} }) {
-                my $cat = MT::Category->load({
-                    blog_id => $blog_id,
-                    label   => $label,
-                    class   => 'category',
-                }) or next;
-                next if $seen{ $cat->id }++;
-                push @cat_ids, $cat->id;
+                my $cat_id = $cat_id_by_label->{$label};
+                next unless defined $cat_id;
+                next if $seen{$cat_id}++;
+                push @cat_ids, $cat_id;
             }
             _set_categories($entry, \@cat_ids) if @cat_ids;
         }
@@ -393,6 +418,22 @@ sub import_entries {
         rebuilt      => JSON::false,
         import_as_me => JSON::true,
     };
+}
+
+# インポート先ブログのカテゴリを1回だけロードして label => id を作る。
+# ラベルごとに load を撃つと、記事間で同名ラベルが出るたび同じクエリを繰り返す。
+# 同名ラベルが複数ある場合はスカラー load と同じくストア順の先頭を採用し、後勝ちで上書きしない。
+sub _category_id_by_label {
+    my ($blog_id) = @_;
+    require MT::Category;
+    my %by_label;
+    for my $cat (MT::Category->load({ blog_id => $blog_id, class => 'category' })) {
+        my $label = $cat->label;
+        next unless defined $label && $label ne '';
+        next if exists $by_label{$label};
+        $by_label{$label} = $cat->id;
+    }
+    return \%by_label;
 }
 
 sub _parse_mt_export {
@@ -499,12 +540,14 @@ sub _to_hash {
         $hash->{excerpt} = $entry->excerpt   // '';
         $hash->{more}    = $entry->text_more // '';
     }
-    my @placements = MT::Placement->load({ entry_id => $entry->id });
-    if (@placements) {
-        require MT::Category;
+    # entry_get / entry_list の出力互換のため、ここでは folder を除外しない。
+    my ($placements, $cat_by_id) = _load_entry_categories($entry->id);
+    if (@$placements) {
         $hash->{categories} = [
-            map { my $c = MT::Category->load($_->category_id); $c ? { id => $c->id, label => $c->label } : () }
-            @placements
+            map {
+                my $c = $cat_by_id->{ $_->category_id // '' };
+                $c ? { id => $c->id, label => $c->label } : ()
+            } @$placements
         ];
     }
     return $hash;

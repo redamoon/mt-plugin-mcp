@@ -202,4 +202,66 @@ sub _seed_author {
     ok($got, 'export_blog があれば成功') or diag($@);
 }
 
+# 複数カテゴリが付いていても MT::Category->load は1回で済む（N+1 の解消）。
+{
+    MT::Entry::reset();
+    MT::Author::reset();
+    MT::Permission::reset();
+    MT::Placement::reset();
+    MT::Category::reset();
+    _seed_author();
+    _seed_entry(id => 1);
+
+    for my $spec ([ 2, 'News', 'category' ], [ 3, 'Tech', 'category' ], [ 4, 'Docs', 'folder' ]) {
+        my ($id, $label, $class) = @$spec;
+        my $c = MT::Category->new;
+        $c->id($id);
+        $c->blog_id(1);
+        $c->label($label);
+        $c->class($class);
+        $c->save;
+        my $pl = MT::Placement->new;
+        $pl->entry_id(1);
+        $pl->blog_id(1);
+        $pl->category_id($id);
+        $pl->is_primary($id == 2 ? 1 : 0);
+        $pl->save;
+    }
+
+    $MT::Category::LOAD_COUNT = 0;
+    my $got = MTMCP::Tools::Entry::export(
+        _app(id => 1, is_superuser => 1),
+        { entry_id => 1 },
+    );
+    is($MT::Category::LOAD_COUNT, 1, 'カテゴリ3件でも MT::Category->load は1回');
+    like($got->{body}, qr/^CATEGORY: News$/m, 'News が出る');
+    like($got->{body}, qr/^CATEGORY: Tech$/m, 'Tech が出る');
+    unlike($got->{body}, qr/Docs/, 'folder は除外したまま');
+    is(scalar(() = $got->{body} =~ /^PRIMARY CATEGORY: /mg), 1, 'PRIMARY CATEGORY は1行だけ');
+    like($got->{body}, qr/^PRIMARY CATEGORY: News$/m, 'PRIMARY は is_primary の placement');
+}
+
+# 参照先が消えている category_id は現行どおりスキップする。
+{
+    MT::Entry::reset();
+    MT::Author::reset();
+    MT::Permission::reset();
+    MT::Placement::reset();
+    MT::Category::reset();
+    _seed_author();
+    _seed_entry(id => 1);
+    my $pl = MT::Placement->new;
+    $pl->entry_id(1);
+    $pl->blog_id(1);
+    $pl->category_id(999);
+    $pl->is_primary(1);
+    $pl->save;
+
+    my $got = MTMCP::Tools::Entry::export(
+        _app(id => 1, is_superuser => 1),
+        { entry_id => 1 },
+    );
+    unlike($got->{body}, qr/^CATEGORY: /m, '見つからない category_id は行を出さない');
+}
+
 done_testing();

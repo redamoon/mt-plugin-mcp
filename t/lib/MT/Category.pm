@@ -11,12 +11,16 @@ our @SAVED;
 our @REMOVED;
 our $LAST_LOAD_TERMS;
 
+# load の呼び出し回数。N+1 が起きていないかをテストから検証するために数える。
+our $LOAD_COUNT = 0;
+
 sub reset {
     %STORE           = ();
     $NEXT_ID         = 1;
     @SAVED           = ();
     @REMOVED         = ();
     $LAST_LOAD_TERMS = undef;
+    $LOAD_COUNT      = 0;
 }
 
 sub new {
@@ -36,6 +40,7 @@ sub new {
 sub load {
     my ($class, $terms, $args) = @_;
     $LAST_LOAD_TERMS = $terms;
+    $LOAD_COUNT++;
 
     my @objs = values %STORE;
 
@@ -51,7 +56,10 @@ sub load {
             $t{class} = 'category';
         }
         if (exists $t{id}) {
-            @objs = grep { defined $_->id && $_->id == $t{id} } @objs;
+            # 本番の Data::ObjectDriver は arrayref を IN として扱うので、それに合わせる。
+            my @want = ref $t{id} eq 'ARRAY' ? @{ $t{id} } : ($t{id});
+            my %want = map { $_ => 1 } grep { defined } @want;
+            @objs = grep { defined $_->id && $want{ $_->id } } @objs;
         }
         if (exists $t{class}) {
             @objs = grep { ($_->class // '') eq $t{class} } @objs;
