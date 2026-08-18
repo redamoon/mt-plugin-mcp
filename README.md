@@ -5,12 +5,13 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 
 対応ツールの一覧・権限・操作の注意は [docs/tools.md](docs/tools.md) を参照してください。認証の流れは [docs/architecture-auth.md](docs/architecture-auth.md) です。
 
-**はじめて接続する方**は [docs/getting-started.md](docs/getting-started.md) を先に読んでください（プラグイン配置 → Apache → トークン → Cursor までの推奨ルート1本です）。使い方の実例は [利用ガイド](docs/guides.md) です。プラグインを直す人は [開発者オンボーディング](docs/developer-onboarding.md) です。エージェント向けの注意は [AGENTS.md](AGENTS.md) です。
+**はじめて接続する方**は [docs/getting-started.md](docs/getting-started.md) を先に読んでください（プラグイン配置 → Apache → トークン → Cursor までの推奨ルート1本です）。Nginx で動かしている場合は、この README の [Nginx の場合](#nginx-の場合) を参照してください。使い方の実例は [利用ガイド](docs/guides.md) です。プラグインを直す人は [開発者オンボーディング](docs/developer-onboarding.md) です。エージェント向けの注意は [AGENTS.md](AGENTS.md) です。
 
 ## 動作環境
 
 - Movable Type 9（コンテンツタイプ機能は MT7 以降）
 - Apache 2.4+ (CGI または mod_perl)
+- nginx 1.16.0 以上（CGI または PSGI / Starman が別途必要）
 - Perl 5.x (`JSON` モジュール)
 
 ## セットアップ
@@ -41,6 +42,93 @@ RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 ```
 
 > どちらも設定できない場合は、`Authorization` の代わりに `X-MT-Authorization: MTAuth accessToken=<token>` ヘッダーを使う方法もあります（後述「認証ヘッダー」参照）。カスタムヘッダーは Apache の追加設定なしでそのまま CGI に渡ります。
+
+### Nginx の場合
+
+以下は **未検証の草案** です。MT の管理画面と Data API が既に Nginx で動いている前提で、MCP 向けの差分だけを書いています。OS パッケージや fcgiwrap / Starman の入れ方は [MT 本体のドキュメント](https://www.movabletype.jp/documentation/system_requirements.html) の範囲であり、ここでは扱いません。パス（`/mt/` など）は実際の `CGIPath` に合わせてください。
+
+プラグイン側の動きは Apache と同じです。変わるのは、手前のサーバーが `Authorization` を `mt-data-api.cgi` まで届ける方法です。
+
+構成は次の4つに分かれます。
+
+1. **Nginx + fcgiwrap（CGI）** — `fastcgi_param HTTP_AUTHORIZATION` と PATH_INFO 付きの location
+2. **Nginx リバースプロキシ → Starman / PSGI** — [MT 公式が想定する構成](https://www.movabletype.jp/documentation/mt6/reference/psgi-plack-movable-type.html)。`proxy_set_header Authorization` を明示
+3. **Nginx リバースプロキシ → Apache** — フロントの転送 **と** バックエンド Apache の `CGIPassAuth On`（または RewriteRule）の両方が必要
+4. **nginx.conf を触れない** — 既存の `X-MT-Authorization` フォールバック（後述「認証ヘッダー」）
+
+既存の `.cgi` 用 location があるなら、それに `HTTP_AUTHORIZATION`（または `proxy_set_header Authorization`）を足してください。新しい location を丸ごと足すと、想定外の CGI まで同じ設定に巻き込まれます。
+
+#### Nginx + fcgiwrap（CGI）
+
+`location ~ \.cgi$` だと `/mt-data-api.cgi/v4/mcp` にマッチせず 404 になります。`.cgi(/|$)` と `fastcgi_split_path_info` が必要です。`client_max_body_size` は **この location の中** に置きます（`server` 直下に書くとサイト全体の POST 上限が変わります）。
+
+```nginx
+location ~ \.cgi(/|$) {
+    gzip off;
+    include fastcgi_params;
+    fastcgi_split_path_info ^(.+?\.cgi)(/.*)$;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    fastcgi_param PATH_INFO $fastcgi_path_info;
+    fastcgi_param PATH_TRANSLATED $document_root$fastcgi_path_info;
+    fastcgi_param HTTP_AUTHORIZATION $http_authorization;
+    fastcgi_pass unix:/var/run/fcgiwrap.socket;
+    fastcgi_read_timeout 300s;
+    client_max_body_size 32m;
+}
+```
+
+`fastcgi_pass_header Authorization;` は **レスポンス**側のヘッダー透過であり、リクエストの `Authorization` を CGI に渡す設定ではありません。使わないでください。
+
+#### Nginx → Starman / PSGI
+
+`location` と `proxy_pass` のパスは CGIPath に合わせます。次は `/mt/` 配下の例です。`/cgi-bin/mt/` なら両方をそのプレフィックスに置き換えてください。パスがずれると location に入らず、Authorization の転送も効きません。公開サイトの静的ファイルを Nginx が配信しているなら `location /` にはせず、MT の CGIPath だけをプロキシしてください。
+
+```nginx
+location /mt/ {
+    proxy_pass http://127.0.0.1:5000/mt/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Authorization $http_authorization;
+    proxy_http_version 1.1;
+    proxy_read_timeout 300s;
+    client_max_body_size 32m;
+}
+```
+
+Starman 単体（前段 Nginx なし）では CGI ではないため、Apache の `CGIPassAuth` 相当は不要です。本番では通常 Nginx が前に来ます。
+
+#### Nginx → Apache
+
+フロントの Nginx で `Authorization` を転送しても、バックエンドの Apache は既定で CGI から剥がします。**Nginx だけ直しても 401 のまま**です。Apache 側に [上記の `CGIPassAuth On`](#2-apache-の設定)（または RewriteRule）も入れてください。
+
+```nginx
+# パスは CGIPath に合わせる（`/mt/` は例）
+location /mt/ {
+    proxy_pass http://127.0.0.1:8080/mt/;
+    proxy_set_header Host $host;
+    proxy_set_header Authorization $http_authorization;
+    proxy_http_version 1.1;
+    client_max_body_size 32m;
+}
+```
+
+#### `.well-known`（OAuth 自動検出を使う場合）
+
+JSON はドキュメントルート直下の静的ファイルです（`mt-data-api.cgi` の外側。配置内容は後述「方法A」）。`location` を空で足すだけでは配信できません。`root` をドキュメントルートに向け、Starman / CGI には渡さないでください。拡張子なしファイルは `default_type application/json;` が無いとクライアントがメタデータとして読めないことがあります。
+
+```nginx
+location /.well-known/ {
+    root /var/www/html;  # 実際のドキュメントルート
+    default_type application/json;
+}
+```
+
+#### リクエストサイズと SSE
+
+Nginx の `client_max_body_size` 既定は 1m です。`asset_upload` は Base64 デコード後 20MB までで、ペイロードは最大約 27MB になるため、MCP 用 location に **32m** を推奨します。
+
+本プラグインの GET（SSE）は `event: endpoint` を1回返して終わります。長時間ストリームではないので `proxy_buffering off` は必須ではありません。`gzip off` は CGI 用 location に既に入っていることが多いです。
 
 ### 3. アクセストークンを発行
 
@@ -253,10 +341,10 @@ MTがローカルDocker等で動いていて `http://localhost:PORT` にしか�
 
 認証ヘッダー（いずれか）：
 
-| ヘッダー | 値 | Apache 設定 | 備考 |
+| ヘッダー | 値 | サーバ設定 | 備考 |
 |---|---|---|---|
-| `Authorization` | `Bearer <token>` | `CGIPassAuth On` または RewriteRule が必要 | Cursor / Claude Desktop で動作確認済 |
-| `X-MT-Authorization` | `MTAuth accessToken=<token>` | 不要 | Apache 設定変更できない環境向け |
+| `Authorization` | `Bearer <token>` | Apache: `CGIPassAuth On` または RewriteRule。Nginx: `fastcgi_param HTTP_AUTHORIZATION` または `proxy_set_header Authorization`（[Nginx の場合](#nginx-の場合)） | Cursor / Claude Desktop で動作確認済（Apache） |
+| `X-MT-Authorization` | `MTAuth accessToken=<token>` | Apache / Nginx とも追加設定不要 | サーバ設定を変更できない環境向け |
 
 ## 疎通確認
 
@@ -335,6 +423,9 @@ tools/
 | 症状 | 原因 | 対処 |
 |---|---|---|
 | `401 Unauthorized` | トークンが無効または期限切れ | MT 管理画面でトークンを再発行 |
+| `401 Unauthorized`（Nginx） | `Authorization` が FastCGI / upstream に届いていない | `fastcgi_param HTTP_AUTHORIZATION $http_authorization;` または `proxy_set_header Authorization $http_authorization;`。触れない場合は `X-MT-Authorization` |
+| `404` on `/v4/mcp`（Nginx） | `location` が `.cgi$` のみ、または `location /mt/` なのに CGIPath が `/` | fcgiwrap なら `.cgi(/|$)` と `PATH_INFO`。Starman / リバースプロキシなら `location` を実際の CGIPath に合わせる |
+| `413 Request Entity Too Large` | Nginx の `client_max_body_size` 既定が 1m | MCP 用 location に `client_max_body_size 32m;`（`asset_upload` の Base64 ペイロードは最大約 27MB）。`server` 全体に書かない |
 | `SSE error: Non-200 status code (404)` | GET エンドポイントが未登録（旧バージョン） | プラグインを最新版に更新し MT を再起動 |
 | ツール説明が文字化けする | JSON エンコーダの設定不備（旧バージョン） | プラグインを最新版に更新し MT を再起動 |
 | `Unknown endpoint` | プラグインのキャッシュが古い | MT 管理画面でプラグインを無効→有効に切り替え |

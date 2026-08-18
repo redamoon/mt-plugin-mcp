@@ -69,7 +69,7 @@ prove -I plugins/MTMCP/lib -I t/lib t/folder.t t/page.t
 
 ローカルや検証用 MT にプラグインを入れたあと:
 
-1. Apache で `CGIPassAuth On`（[getting-started.md](getting-started.md) ステップ 2）
+1. Apache で `CGIPassAuth On`（[getting-started.md](getting-started.md) ステップ 2）。Nginx なら [README の Nginx の場合](../README.md#nginx-の場合)
 2. 管理画面 **システム > プラグイン > MT MCP Server > 設定** でトークン発行。または `POST /v4/mcp/authenticate`（[README](../README.md#方法b-ログインapiで直接発行非対話自動化向け)）
 3. ベース URL は `https://<host>/mt/mt-data-api.cgi/v4/mcp`（`mt.cgi` ではない）
 
@@ -84,4 +84,4 @@ curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
 
 成功すると `serverInfo.name` が `MT MCP Server` です。続けて `tools/list` と `blog_list` は [README の疎通確認](../README.md#疎通確認) です。
 
-401 のときはトークン期限（7 日）、`CGIPassAuth`、旧形式トークン（ユーザー未紐づけ）を疑います。シーケンスは [architecture-auth.md](architecture-auth.md) です。
+401 のときはトークン期限（7 日）、`CGIPassAuth`（Nginx なら `HTTP_AUTHORIZATION` / `proxy_set_header Authorization` の欠落）、旧形式トークン（ユーザー未紐づけ）を疑います。シーケンスは [architecture-auth.md](architecture-auth.md) です。

@@ -10,6 +10,7 @@
 |---|---|
 | 所要時間 | 約 15〜30 分（Apache の再読み込みができる場合） |
 | 前提 | Movable Type 9、Apache 2.4+、Perl の `JSON` モジュール |
+| Nginx の場合 | この手順のステップは分岐しません。[README の Nginx の場合](../README.md#nginx-の場合) を参照してください |
 | 推奨クライアント | Cursor（手動トークン） |
 | 推奨トークン | 管理画面から発行（方法 C） |
 
@@ -43,7 +44,9 @@ VirtualHost または Directory に次を足して、Apache を再読み込み�
 
 パスは実際の MT インストール先に合わせてください。
 
-サーバ設定を変えられない場合は、`.htaccess` の RewriteRule か、`X-MT-Authorization` ヘッダーがあります。詳細は [README の Apache 設定](../README.md#2-apache-の設定) と [認証アーキテクチャ](architecture-auth.md#ヘッダーと-apache-の関係) です。
+サーバ設定を変えられない場合は、`.htaccess` の RewriteRule か、`X-MT-Authorization` ヘッダーがあります。詳細は [README の Apache 設定](../README.md#2-apache-の設定) と [認証アーキテクチャ](architecture-auth.md#ヘッダーと-web-サーバーの関係) です。
+
+Nginx で動かしている場合は、ステップを分岐せず [README の Nginx の場合](../README.md#nginx-の場合) を参照してください。
 
 **ここまでで確認できること:** Apache の設定を保存し、`apachectl configtest`（または同等）が通る。実際のトークン通過は次のステップ以降で確認します。
 
@@ -103,7 +106,7 @@ curl で同じことを確認する場合は [README の疎通確認](../README.
 
 | 症状 | まず疑うこと |
 |---|---|
-| 401 | トークン期限切れ、またはステップ 2 の `CGIPassAuth` 漏れ |
+| 401 | トークン期限切れ、またはステップ 2 の `CGIPassAuth` 漏れ（Nginx なら [README](../README.md#nginx-の場合)） |
 | ログイン画面が返る | URL が `mt.cgi` になっている。`mt-data-api.cgi/v4/mcp` にする |
 | 権限エラー | トークンのユーザーがそのブログを操作できない |
 

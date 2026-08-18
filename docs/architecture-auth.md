@@ -192,9 +192,21 @@ flowchart TD
 
 ---
 
-## ヘッダーと Apache の関係
+<a id="ヘッダーと-apache-の関係"></a>
 
-Apache は `Authorization` ヘッダを CGI に渡す前に剥がす。対応方法は3つ：
+## ヘッダーと Web サーバーの関係
+
+`App.pm` は `Authorization: Bearer` を優先し、無ければ `X-MT-Authorization` にフォールバックする。Web サーバーがリクエストヘッダーを CGI / PSGI まで届けるかどうかは、手前の構成による。
+
+| 構成 | `Authorization` の扱い | 必要な設定 | 備考 |
+|------|------------------------|------------|------|
+| Apache CGI | 既定で剥がす | `CGIPassAuth On` または RewriteRule | getting-started の推奨ルート |
+| Nginx + fcgiwrap（CGI） | 既定では剥がさないが、`fastcgi_params` の書き方で欠ける | `fastcgi_param HTTP_AUTHORIZATION $http_authorization;` を明示 | `.cgi$` だけでは PATH_INFO 付き URI が 404 |
+| Nginx → Starman / PSGI | 独自の `proxy_set_header` で他ヘッダーだけ上書きすると欠ける | `proxy_set_header Authorization $http_authorization;` を明示 | Starman 直結（前段 Nginx なし）では剥がさない |
+| Nginx → Apache | Nginx が転送しても Apache 側でまた剥がされる | 両方必要（転送 + `CGIPassAuth`） | フロントだけ Nginx の構成 |
+| カスタムヘッダー | 剥がさない（ハイフン付きなので `underscores_in_headers` 不要） | 不要 | `X-MT-Authorization: MTAuth accessToken=<token>`。サーバ設定を触れない場合のフォールバック |
+
+Apache CGI での対応は次の3つ：
 
 | 方法 | サーバ設定 | ヘッダー形式 | 備考 |
 |------|-----------|-------------|------|
@@ -202,13 +214,15 @@ Apache は `Authorization` ヘッダを CGI に渡す前に剥がす。対応方
 | RewriteRule | `.htaccess`（権限低め） | `Authorization: Bearer <token>` | **推奨** |
 | カスタムヘッダー | 不要 | `X-MT-Authorization: MTAuth accessToken=<token>` | フォールバック |
 
+Nginx 向けのサンプル（未検証の草案）は [README の Nginx の場合](../README.md#nginx-の場合) です。
+
 ### `Authorization: Bearer` を使う（推奨）
 
-発行したトークンを MCP クライアントの `headers` に指定する。Apache が `Authorization` ヘッダーを CGI に渡すよう設定が必要。OAuth 自動検出に対応したクライアントでは `headers` なしでも接続できる。
+発行したトークンを MCP クライアントの `headers` に指定する。Apache では `Authorization` ヘッダーを CGI に渡す設定が必要。Nginx では FastCGI / リバースプロキシ側で明示する（上表）。OAuth 自動検出に対応したクライアントでは `headers` なしでも接続できる。
 
-### カスタムヘッダーを使う（Apache 設定不要のフォールバック）
+### カスタムヘッダーを使う（サーバ設定不要のフォールバック）
 
-Apache はカスタムヘッダー（`X-*`）を剥がさず CGI の `HTTP_X_MT_AUTHORIZATION` 環境変数として渡す。サーバ設定を変更できない場合のフォールバックとして利用可能。
+Apache はカスタムヘッダー（`X-*`）を剥がさず CGI の `HTTP_X_MT_AUTHORIZATION` 環境変数として渡す。Nginx でもハイフン付きのため `underscores_in_headers` は不要。サーバ設定を変更できない場合のフォールバックとして利用可能。
 
 ```
 X-MT-Authorization: MTAuth accessToken=<accessToken>
