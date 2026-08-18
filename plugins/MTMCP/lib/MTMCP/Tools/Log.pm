@@ -4,6 +4,7 @@ use warnings;
 use utf8;
 use MT::Log;
 use MTMCP::Perm;
+use MTMCP::Author;
 
 use constant MESSAGE_LIST_LIMIT => 500;
 use constant MAX_LIMIT          => 200;
@@ -150,15 +151,8 @@ sub _level_to_name {
 
 sub _author_name {
     my ($author_id, $cache) = @_;
-    return '' unless $author_id;
-    return $cache->{$author_id} if $cache && exists $cache->{$author_id};
-    my $author = eval {
-        require MT::Author;
-        MT::Author->load($author_id);
-    };
-    my $name = $author ? ($author->nickname || $author->name || '') : '';
-    $cache->{$author_id} = $name if $cache;
-    return $name;
+    my $author = MTMCP::Author::load_cached($author_id, $cache);
+    return $author ? ($author->nickname || $author->name || '') : '';
 }
 
 sub _to_hash {

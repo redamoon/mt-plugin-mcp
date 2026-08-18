@@ -8,6 +8,7 @@ use MT::Placement;
 use MTMCP::Perm;
 use MTMCP::Search;
 use MTMCP::Args;
+use MTMCP::Author;
 
 use constant PREVIEW_MAX_CHARS => 100_000;
 use constant EXPORT_MAX_CHARS  => 100_000;
@@ -274,8 +275,7 @@ sub _to_mt_export {
     my ($entry) = @_;
     my $author_name = 'author';
     if (my $aid = $entry->author_id) {
-        require MT::Author;
-        my $author = eval { MT::Author->load($aid) };
+        my $author = MTMCP::Author::load_cached($aid);
         $author_name = $author->name if $author && defined $author->name && $author->name ne '';
     }
 
