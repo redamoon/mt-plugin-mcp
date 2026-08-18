@@ -186,6 +186,36 @@ sub _seed_author {
     is(length($got->{body}), 100_000, 'body は上限');
 }
 
+# 打ち切りの境界: 上限ちょうどは打ち切らず、上限+1 で打ち切る。
+{
+    MT::Entry::reset();
+    MT::Author::reset();
+    _seed_entry(id => 1, text => '');
+    my $overhead = MTMCP::Tools::Entry::export(
+        _app(id => 1, is_superuser => 1),
+        { entry_id => 1 },
+    )->{length};
+    cmp_ok($overhead, '<', 100_000, '本文以外の雛形は上限より短い');
+
+    MT::Entry::reset();
+    _seed_entry(id => 1, text => ('x' x (100_000 - $overhead)));
+    my $exact = MTMCP::Tools::Entry::export(
+        _app(id => 1, is_superuser => 1),
+        { entry_id => 1 },
+    );
+    is($exact->{length}, 100_000, '上限ちょうどの length');
+    ok(!$exact->{truncated}, '上限ちょうどは truncated が偽');
+
+    MT::Entry::reset();
+    _seed_entry(id => 1, text => ('x' x (100_001 - $overhead)));
+    my $over = MTMCP::Tools::Entry::export(
+        _app(id => 1, is_superuser => 1),
+        { entry_id => 1 },
+    );
+    is($over->{length}, 100_000, '上限+1 は上限まで打ち切る');
+    ok($over->{truncated}, '上限+1 は truncated が真');
+}
+
 {
     MT::Entry::reset();
     MT::Author::reset();

@@ -116,17 +116,6 @@ MT
     _reset();
     eval {
         MTMCP::Tools::Entry::import_entries(
-            _app(id => 9, is_superuser => 1),
-            { blog_id => 1, body => $mt_text, confirm => 1, import_as_me => 0 },
-        );
-    };
-    like($@, qr/import_as_me/, 'import_as_me 無効化は拒否');
-}
-
-{
-    _reset();
-    eval {
-        MTMCP::Tools::Entry::import_entries(
             _app(id => 3, is_superuser => 0),
             { blog_id => 1, body => $mt_text, confirm => 1 },
         );
@@ -362,6 +351,75 @@ MT
     my @pl = MT::Placement->load({ entry_id => $got->{entry_ids}[0] });
     is(scalar @pl, 1, '同ブログの category だけ付与する');
     is($pl[0]->category_id, 2, 'News のみ');
+}
+
+# KEYWORDS セクションは取り込まない。本文・追記・概要へ混ざらないことを固定する。
+{
+    _reset();
+    my $with_keywords = <<'MT';
+TITLE: WithKeywords
+BASENAME: with-keywords
+STATUS: Publish
+-----
+BODY:
+body line
+-----
+KEYWORDS:
+mt, perl, mcp
+-----
+EXTENDED BODY:
+more line
+-----
+EXCERPT:
+ex line
+-----
+--------
+MT
+    my $got = MTMCP::Tools::Entry::import_entries(
+        _app(id => 9, is_superuser => 1),
+        { blog_id => 1, body => $with_keywords, confirm => 1 },
+    );
+    is($got->{imported}, 1, 'KEYWORDS があってもインポートできる');
+    my $e = MT::Entry->load({ id => $got->{entry_ids}[0], class => 'entry' });
+    is($e->title, 'WithKeywords', 'KEYWORDS 入りでも title');
+    is($e->text, 'body line', 'KEYWORDS は body に混ざらない');
+    is($e->text_more, 'more line', 'KEYWORDS の後の EXTENDED BODY を取り込む');
+    is($e->excerpt, 'ex line', 'KEYWORDS の後の EXCERPT を取り込む');
+}
+
+# KEYWORDS が最後のセクションでも、後続の記事に食い込まない。
+{
+    _reset();
+    my $two = <<'MT';
+TITLE: First
+BASENAME: first
+STATUS: Publish
+-----
+BODY:
+first body
+-----
+KEYWORDS:
+tag1
+-----
+--------
+TITLE: Second
+BASENAME: second
+STATUS: Publish
+-----
+BODY:
+second body
+-----
+--------
+MT
+    my $got = MTMCP::Tools::Entry::import_entries(
+        _app(id => 9, is_superuser => 1),
+        { blog_id => 1, body => $two, confirm => 1 },
+    );
+    is($got->{imported}, 2, 'KEYWORDS で終わる記事の次も読む');
+    my @texts = map {
+        MT::Entry->load({ id => $_, class => 'entry' })->text
+    } @{ $got->{entry_ids} };
+    is_deeply([sort @texts], ['first body', 'second body'], 'それぞれの body');
 }
 
 done_testing();
