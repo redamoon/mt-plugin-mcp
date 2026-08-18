@@ -5,6 +5,7 @@ use utf8;
 use MT::Template;
 use MT::TemplateMap;
 use MTMCP::Perm;
+use MTMCP::Args;
 
 # アーカイブテンプレート（テンプレートマップを持てる type）
 my %ARCHIVE_TEMPLATE_TYPES = map { $_ => 1 } qw(
@@ -66,7 +67,7 @@ sub create {
     $map->cat_field_id($args->{cat_field_id}) if defined $args->{cat_field_id};
     $map->dt_field_id($args->{dt_field_id})   if defined $args->{dt_field_id};
 
-    my $want_preferred = _is_true($args->{is_preferred});
+    my $want_preferred = MTMCP::Args::is_true($args->{is_preferred});
     my $existing_pref  = MT::TemplateMap->load({
         blog_id      => $tmpl->blog_id,
         archive_type => $archive_type,
@@ -130,7 +131,7 @@ sub update {
     });
 
     if (defined $args->{is_preferred}) {
-        if (_is_true($args->{is_preferred})) {
+        if (MTMCP::Args::is_true($args->{is_preferred})) {
             $map->prefer(1) or die $map->errstr . "\n";
         }
         else {
@@ -302,13 +303,6 @@ sub _flush_archive_cache {
     my $blog = MT::Blog->load($blog_id) or return;
     $blog->flush_has_archive_type_cache if $blog->can('flush_has_archive_type_cache');
     return;
-}
-
-sub _is_true {
-    my ($v) = @_;
-    return 0 unless defined $v;
-    return 1 if $v;
-    return 0;
 }
 
 sub _to_hash {
