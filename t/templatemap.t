@@ -192,7 +192,7 @@ sub _create_map {
     is(MT::TemplateMap->load($a->{templatemap_id})->is_preferred, 1, '削除前は1件目が preferred');
 
     my $got = eval {
-        MTMCP::Tools::TemplateMap::remove($app, { templatemap_id => $a->{templatemap_id} });
+        MTMCP::Tools::TemplateMap::remove($app, { templatemap_id => $a->{templatemap_id}, confirm => 1 });
     };
     my $err = $@;
     ok($got, 'templatemap_delete は成功する') or diag($err);
@@ -203,7 +203,7 @@ sub _create_map {
     like($blog->archive_type, qr/Individual/, 'まだマップがあるので archive_type は残る');
 
     my $got2 = eval {
-        MTMCP::Tools::TemplateMap::remove($app, { templatemap_id => $b->{templatemap_id} });
+        MTMCP::Tools::TemplateMap::remove($app, { templatemap_id => $b->{templatemap_id}, confirm => 1 });
     };
     ok($got2, '最後のマップの delete も成功する') or diag($@);
     my $blog2 = MT::Blog->load(1);

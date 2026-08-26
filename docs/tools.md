@@ -14,7 +14,7 @@ Movable Type 9 用 MCP サーバーが公開するツールの一覧と、権限
 | `entry_get` | 記事1件取得（本文含む） |
 | `entry_create` | 記事作成（デフォルト: 下書き） |
 | `entry_update` | 記事更新 |
-| `entry_delete` | 記事削除（`DeleteFilesAtRebuild` が無効なら公開 HTML が残ることがある） |
+| `entry_delete` | 記事削除（`confirm: true` 必須。`DeleteFilesAtRebuild` が無効なら公開 HTML が残ることがある） |
 | `entry_preview` | 記事を Individual アーカイブとしてビルド（ファイルは書き出さない。`entry_create` 前の見た目確認） |
 | `entry_export` | 記事1件を MT Import/Export テキストで返す（`entry_id` 必須。Page 不可。文字数打ち切り。バックアップ代替ではない） |
 | `entry_import` | 記事を一括作成する破壊的操作（`confirm: true` 必須。著者は呼び出しユーザー。省略時は下書き。再構築しない。1MB まで） |
@@ -22,27 +22,27 @@ Movable Type 9 用 MCP サーバーが公開するツールの一覧と、権限
 | `page_get` | 固定ページ1件取得（本文含む） |
 | `page_create` | 固定ページ作成（デフォルト: 下書き。フォルダは `folder_id` 単数） |
 | `page_update` | 固定ページ更新（`folder_id: 0` でフォルダ解除） |
-| `page_delete` | 固定ページ削除（`DeleteFilesAtRebuild` が無効なら公開 HTML が残ることがある） |
+| `page_delete` | 固定ページ削除（`confirm: true` 必須。`DeleteFilesAtRebuild` が無効なら公開 HTML が残ることがある） |
 | `page_preview` | 固定ページを Page アーカイブとしてビルド（ファイルは書き出さない） |
 | `category_list` | カテゴリ一覧（`category_set_id` 省略時は記事カテゴリ。指定時はセット内） |
 | `category_get` | カテゴリ1件取得（セット内も含む。フォルダは見つからない） |
 | `category_create` | カテゴリ作成（任意の `category_set_id`） |
 | `category_update` | カテゴリ更新 |
-| `category_delete` | カテゴリ削除（取り消せない） |
+| `category_delete` | カテゴリ削除（`confirm: true` 必須。取り消せない） |
 | `category_permutate` | カテゴリの表示順変更（当該スコープの全 ID 完全一致） |
 | `category_set_list` | カテゴリセット一覧 |
 | `category_set_get` | カテゴリセット1件取得（配下カテゴリ含む） |
 | `category_set_create` | カテゴリセット作成（サイト内で名前一意） |
 | `category_set_update` | カテゴリセット名の更新（カテゴリ配列は不可） |
-| `category_set_delete` | カテゴリセット削除（配下カテゴリも消える。取り消せない） |
+| `category_set_delete` | カテゴリセット削除（`confirm: true` 必須。配下カテゴリも消える。取り消せない） |
 | `tag_list` | タグ一覧取得（記事・ページ・アセット・コンテンツデータ） |
 | `tag_rename` | サイト内のタグ名変更（取り消せない。他サイト利用時は clone＋付け替え） |
-| `tag_delete` | サイトからタグを外す（取り消せない。関連オブジェクトから外れる） |
+| `tag_delete` | サイトからタグを外す（`confirm: true` 必須。取り消せない。関連オブジェクトから外れる） |
 | `folder_list` | フォルダ一覧取得（固定ページ用。記事カテゴリとは別） |
 | `folder_get` | フォルダ1件取得 |
 | `folder_create` | フォルダ作成 |
 | `folder_update` | フォルダ更新 |
-| `folder_delete` | フォルダ削除（配下ページは親またはルートへ移る） |
+| `folder_delete` | フォルダ削除（`confirm: true` 必須。配下ページは親またはルートへ移る） |
 
 ## アセット・テンプレート
 
@@ -51,13 +51,13 @@ Movable Type 9 用 MCP サーバーが公開するツールの一覧と、権限
 | `asset_list` | アセット一覧取得（`keyword` は DB 側 LIKE の部分一致・`offset` ページネーション対応） |
 | `asset_get` | アセット1件取得 |
 | `asset_upload` | ファイルアップロード（Base64）による新規アセット作成 |
-| `asset_delete` | アセット削除 |
+| `asset_delete` | アセット削除（`confirm: true` 必須） |
 | `asset_thumbnail` | 画像アセットのサムネイルURL取得（MTの動的リサイズ機能を利用） |
 | `template_list` | テンプレート一覧取得（`keyword` は DB 側 LIKE の部分一致・`offset` ページネーション対応） |
 | `template_get` | テンプレート1件取得（本文・出力ファイル名・識別子・公開方法含む） |
 | `template_create` | テンプレート新規作成（保存前に構文を自動検証） |
 | `template_update` | テンプレート更新（本文・名前・タイプ・出力設定を部分更新、保存前に構文を自動検証） |
-| `template_delete` | テンプレート削除 |
+| `template_delete` | テンプレート削除（`confirm: true` 必須） |
 | `template_validate` | テンプレート構文の検証のみ（保存しない・行番号付きエラー） |
 | `template_preview` | テンプレートをビルドして出力HTMLを取得（ファイルは書き出さない） |
 | `template_tag_list` | その環境で使える MT タグ一覧（プラグイン追加分も含む） |
@@ -65,12 +65,12 @@ Movable Type 9 用 MCP サーバーが公開するツールの一覧と、権限
 | `templatemap_get` | テンプレートマップ1件取得 |
 | `templatemap_create` | テンプレートマップ作成（`rebuild_template` の前提） |
 | `templatemap_update` | テンプレートマップ更新 |
-| `templatemap_delete` | テンプレートマップ削除（静的ファイルは残ることがある） |
+| `templatemap_delete` | テンプレートマップ削除（`confirm: true` 必須。静的ファイルは残ることがある） |
 | `widgetset_list` | ウィジェットセット一覧（割当順の widgets 付き） |
 | `widgetset_get` | ウィジェットセット1件取得 |
 | `widgetset_create` | ウィジェットセット作成（`widget_ids` で割当） |
 | `widgetset_update` | ウィジェットセット更新（`widget_ids` は全置換） |
-| `widgetset_delete` | ウィジェットセット削除（ウィジェット本体は残る） |
+| `widgetset_delete` | ウィジェットセット削除（`confirm: true` 必須。ウィジェット本体は残る） |
 | `widget_list` | ウィジェット一覧（`widgetset_id` でセット内・割当順） |
 
 ## 再構築（公開）
@@ -100,7 +100,7 @@ Movable Type 9 用 MCP サーバーが公開するツールの一覧と、権限
 | `user_get` | ユーザー1件取得（パスワードは返さない） |
 | `user_create` | ユーザー作成（作成直後はサイト権限なし。ロールは管理画面） |
 | `user_update` | プロフィール更新（表示名・メール・URL・状態。パスワード変更と権限付与はしない） |
-| `user_delete` | ユーザー削除（取り消し不可。自分自身は削除不可） |
+| `user_delete` | ユーザー削除（`confirm: true` 必須。取り消し不可。自分自身は削除不可） |
 | `user_unlock` | ログイン失敗ロックの解除 |
 | `user_recover_password` | パスワード回復メール送信（新しいパスワードは受け取らない） |
 
@@ -126,11 +126,13 @@ Movable Type 9 用 MCP サーバーが公開するツールの一覧と、権限
 | `content_data_get` | コンテンツデータ1件取得（フィールド値・ラベル含む） |
 | `content_data_create` | コンテンツデータ作成 |
 | `content_data_update` | コンテンツデータ更新（部分更新対応） |
-| `content_data_delete` | コンテンツデータ削除 |
+| `content_data_delete` | コンテンツデータ削除（`confirm: true` 必須） |
 
 > `entry_import` は記事を一括作成する破壊的操作です。`confirm: true` が無いと実行しません。
 >
-> 削除系ツール（`entry_delete` / `page_delete` / `folder_delete` / `category_delete` / `category_set_delete` / `asset_delete` / `template_delete` / `templatemap_delete` / `widgetset_delete` / `content_data_delete` / `user_delete`）は取り消せない操作です。AI が実行する前に対象を一覧・取得系ツールで確認するよう促してください。
+> 削除系ツール（`entry_delete` / `page_delete` / `folder_delete` / `category_delete` / `category_set_delete` / `tag_delete` / `asset_delete` / `template_delete` / `templatemap_delete` / `widgetset_delete` / `content_data_delete` / `user_delete`）は取り消せない操作で、**すべて `confirm: true` が必須**です。付いていない呼び出しは対象を読み込む前にエラーになります。AI が実行する前に対象を一覧・取得系ツールで確認するよう促してください。
+>
+> `confirm` は `inputSchema` の `required` にも入っています（v0.8.0 から）。v0.7.x までの `confirm` なしの呼び出しは失敗するようになりました。
 
 ## 権限と注意
 

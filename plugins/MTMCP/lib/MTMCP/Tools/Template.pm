@@ -5,6 +5,7 @@ use utf8;
 use JSON;
 use MT::Template;
 use MTMCP::Perm;
+use MTMCP::Args;
 use MTMCP::Search;
 
 # テンプレート本文をレンダリングして返すときの上限（文字数）。
@@ -94,6 +95,7 @@ sub create {
 sub remove {
     my ($app, $args) = @_;
     my $tmpl_id = $args->{template_id} or die "template_id is required\n";
+    MTMCP::Args::require_confirm($args, "テンプレートを削除する取り消せない操作です");
     my $tmpl = MT::Template->load($tmpl_id) or die "Template not found: $tmpl_id\n";
     MTMCP::Perm::require_blog_permission($app, $tmpl->blog_id, 'edit_templates', 'テンプレートの編集');
     my $name = $tmpl->name;

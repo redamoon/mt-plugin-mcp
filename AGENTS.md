@@ -31,6 +31,8 @@ skills/movable-type-mcp/       # 配布用 Claude Skill（運用手順。Perl �
 
 新しい MCP ツールを足すときは、実装を `plugins/MTMCP/lib/MTMCP/Tools/` に置き、`Protocol.pm` のディスパッチ表と `_tool_definitions()` の両方に登録します。ツール名・権限の説明を変えたら [docs/tools.md](docs/tools.md) も合わせます。
 
+削除系ツール（`*_delete`）を足すときは、`remove` の先頭で `MTMCP::Args::require_confirm($args, "…")` を呼び、`inputSchema` の `properties` と `required` の両方に `confirm` を入れます。`t/require_confirm.t` が `_delete` で終わる全ツールを走査して付け忘れを落とします。
+
 認証まわりの図とエンドポイントは [docs/architecture-auth.md](docs/architecture-auth.md) です。実装の正本は `Auth.pm` / `OAuth.pm` / `App.pm` / `config.yaml` です。
 
 ## Tools とテスト

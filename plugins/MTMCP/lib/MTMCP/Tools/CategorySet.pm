@@ -5,6 +5,7 @@ use utf8;
 use MT::CategorySet;
 use MT::Category;
 use MTMCP::Perm;
+use MTMCP::Args;
 
 sub _load_set {
     my ($category_set_id) = @_;
@@ -109,6 +110,7 @@ sub remove {
     my ($app, $args) = @_;
     my $category_set_id = $args->{category_set_id}
         or die "category_set_id is required\n";
+    MTMCP::Args::require_confirm($args, "カテゴリセットを削除する取り消せない操作です");
     my $set = _require_set($category_set_id);
     _require_manage($app, $set->blog_id);
     my $name = $set->name;

@@ -88,7 +88,7 @@ sub _seed_page {
 {
     MT::Entry::reset();
     _seed_page(id => 99);
-    my $got = eval { MTMCP::Tools::Entry::remove($app, { entry_id => 99 }) };
+    my $got = eval { MTMCP::Tools::Entry::remove($app, { entry_id => 99, confirm => 1 }) };
     my $err = $@;
     ok(!$got, 'entry_delete(Page ID) は成功しない');
     like($err, qr/Entry not found: 99/, 'entry_delete は Page ID を Entry not found にする');
@@ -137,7 +137,7 @@ sub _seed_page {
 {
     MT::Entry::reset();
     _seed_entry(id => 1, title => 'Delete me');
-    my $got = eval { MTMCP::Tools::Entry::remove($app, { entry_id => 1 }) };
+    my $got = eval { MTMCP::Tools::Entry::remove($app, { entry_id => 1, confirm => 1 }) };
     my $err = $@;
     ok($got, 'entry_delete(Entry ID) は成功する') or diag($err);
     is($got->{status}, 'deleted', 'status は deleted');
@@ -163,7 +163,7 @@ sub _seed_page {
     MT::Blog::reset();
     _seed_entry(id => 1, title => 'Delete files');
     my $app_on = bless { config => FakeConfig->new(1) }, 'FakeApp';
-    my $got = eval { MTMCP::Tools::Entry::remove($app_on, { entry_id => 1 }) };
+    my $got = eval { MTMCP::Tools::Entry::remove($app_on, { entry_id => 1, confirm => 1 }) };
     ok($got, 'DeleteFilesAtRebuild 時も entry_delete は成功') or diag($@);
     is(scalar @MT::Blog::_Publisher::REMOVED_ARCHIVE, 1, 'entry も公開アーカイブ削除を呼ぶ');
     is($MT::Blog::_Publisher::REMOVED_ARCHIVE[0]{ArchiveType}, 'Individual', 'ArchiveType は Individual');
@@ -174,7 +174,7 @@ sub _seed_page {
     MT::Blog::reset();
     _seed_entry(id => 1, title => 'Keep files');
     my $app_off = bless { config => FakeConfig->new(0) }, 'FakeApp';
-    my $got = eval { MTMCP::Tools::Entry::remove($app_off, { entry_id => 1 }) };
+    my $got = eval { MTMCP::Tools::Entry::remove($app_off, { entry_id => 1, confirm => 1 }) };
     ok($got, '無効時も entry_delete は成功') or diag($@);
     is(scalar @MT::Blog::_Publisher::REMOVED_ARCHIVE, 0, 'entry も無効時は公開ファイルを消さない');
 }

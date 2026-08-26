@@ -259,7 +259,7 @@ my $app = FakeApp->new(user => $caller, config => FakeConfig->new());
 {
     MT::Author::reset();
     _seed(id => 99, name => 'me');
-    my $got = eval { MTMCP::Tools::User::remove($app, { user_id => 99 }) };
+    my $got = eval { MTMCP::Tools::User::remove($app, { user_id => 99, confirm => 1 }) };
     my $err = $@;
     ok(!$got, '自分自身の削除は失敗');
     like($err, qr/自分自身/, '自分削除メッセージ');
@@ -277,7 +277,7 @@ my $app = FakeApp->new(user => $caller, config => FakeConfig->new());
         user   => FakeUser->new(id => 8, is_superuser => 0, can_manage_users_groups => 1),
         config => FakeConfig->new(),
     );
-    my $got = eval { MTMCP::Tools::User::remove($mgr, { user_id => 1 }) };
+    my $got = eval { MTMCP::Tools::User::remove($mgr, { user_id => 1, confirm => 1 }) };
     my $err = $@;
     ok(!$got, '非 superuser は superuser を消せない');
     like($err, qr/スーパーユーザー/, 'superuser 削除拒否');
@@ -286,7 +286,7 @@ my $app = FakeApp->new(user => $caller, config => FakeConfig->new());
 {
     MT::Author::reset();
     _seed(id => 1, name => 'root', is_superuser => 1);
-    my $ok = MTMCP::Tools::User::remove($app, { user_id => 1 });
+    my $ok = MTMCP::Tools::User::remove($app, { user_id => 1, confirm => 1 });
     is($ok->{status}, 'deleted', 'superuser 同士の他者削除は可');
     ok(!MT::Author->load({ id => 1, type => MT::Author::AUTHOR() }), '削除される');
 }

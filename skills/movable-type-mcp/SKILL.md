@@ -23,7 +23,7 @@ MT を MCP ツールで操作するときの手順。引数の正本はツール
 4. **テンプレートは検証ループ。** 詳細は [references/templates.md](references/templates.md)。
 5. **インデックステンプレートには `outfile` が必須。** 空だとそのサイトの `rebuild_site` / `rebuild_entry` が壊れる。公開しないなら `build_type: 0`。
 6. **`rebuild_site` は最終手段。** まず `rebuild_template` / `rebuild_entry` / `rebuild_page` / `rebuild_content_data`。カテゴリアーカイブだけなど範囲が明確なときだけ `rebuild_site` に `archive_type` を付ける。
-7. **削除系は取り消せない。** 実行前に一覧・取得系で対象を提示し、ユーザーの確認を取る。`entry_import` は `confirm: true` が無いと動かない。確認なしで消さない。
+7. **削除系は取り消せない。** 実行前に一覧・取得系で対象を提示し、ユーザーの確認を取る。削除系ツールと `entry_import` は `confirm: true` が無いと動かない（v0.8.0 以降）。ユーザーの確認を取ってから `confirm: true` を付ける。自動で付けて消さない。
 8. **権限エラーはリトライしない。** `edit_templates` / `rebuild` / ブログ権限などのメッセージが出たら、ユーザーに MT 側の権限付与または権限のあるユーザーでのトークン再発行を促す。
 
 preview 系（`entry_preview` / `page_preview` / `template_preview`）はビルド結果を返すだけで公開ファイルを書かない。見た目確認に使う。
@@ -40,7 +40,7 @@ preview 系（`entry_preview` / `page_preview` / `template_preview`）はビル�
 
 **不要な記事を消して**
 
-`blog_list` → `entry_list` / `entry_get` で候補を提示 → 確認後にだけ `entry_delete`
+`blog_list` → `entry_list` / `entry_get` で候補を提示 → 確認後にだけ `entry_delete`（`confirm: true` 付き）
 
 ## 参照（必要なときだけ読む）
 

@@ -200,7 +200,7 @@ sub _seed_ot {
     _seed_ot(blog_id => 1, tag_id => $tag->id, object_id => 1);
     _seed_ot(blog_id => 1, tag_id => $tag->id, object_id => 2, object_datasource => 'asset');
     my $got = eval {
-        MTMCP::Tools::Tag::remove($app, { blog_id => 1, tag_id => $tag->id });
+        MTMCP::Tools::Tag::remove($app, { blog_id => 1, tag_id => $tag->id, confirm => 1 });
     };
     ok($got, '他サイト残なし delete 成功') or diag($@);
     is($got->{status}, 'deleted', 'status は deleted');
@@ -216,7 +216,7 @@ sub _seed_ot {
     _seed_ot(blog_id => 1, tag_id => $tag->id, object_id => 1);
     _seed_ot(blog_id => 2, tag_id => $tag->id, object_id => 9);
     my $got = eval {
-        MTMCP::Tools::Tag::remove($app, { blog_id => 1, tag_id => $tag->id });
+        MTMCP::Tools::Tag::remove($app, { blog_id => 1, tag_id => $tag->id, confirm => 1 });
     };
     ok($got, '他サイト残あり delete 成功') or diag($@);
     is($got->{status}, 'unlinked', 'status は unlinked');
@@ -234,7 +234,7 @@ sub _seed_ot {
     my $tag = _seed_tag(name => 'nope');
     _seed_ot(blog_id => 2, tag_id => $tag->id);
     my $got = eval {
-        MTMCP::Tools::Tag::remove($app, { blog_id => 1, tag_id => $tag->id });
+        MTMCP::Tools::Tag::remove($app, { blog_id => 1, tag_id => $tag->id, confirm => 1 });
     };
     ok(!$got, '当該サイトに無い tag の delete は失敗');
     like($@, qr/Tag not found/, 'delete も Tag not found');
@@ -318,7 +318,7 @@ sub _seed_ot {
             unless $allowed{$action};
     };
     my $got = eval {
-        MTMCP::Tools::Tag::remove($app, { blog_id => 1, tag_id => $tag->id });
+        MTMCP::Tools::Tag::remove($app, { blog_id => 1, tag_id => $tag->id, confirm => 1 });
     };
     ok(!$got, 'remove_tag 欠如は失敗');
     like($@, qr/タグの削除/, 'remove_tag のラベル');
