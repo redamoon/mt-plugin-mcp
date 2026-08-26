@@ -8,6 +8,7 @@ use MT::Placement;
 use MTMCP::Perm;
 use MTMCP::Search;
 use MTMCP::Args;
+use MTMCP::Author;
 
 use constant PREVIEW_MAX_CHARS => 100_000;
 use constant EXPORT_MAX_CHARS  => 100_000;
@@ -66,6 +67,22 @@ sub _load_entry {
     return MT::Entry->load({ id => $entry_id, class => 'entry' });
 }
 
+# status 文字列を MT::Entry の定数に直す。'publish' 以外は下書き扱い。
+# 省略時の既定は呼び出し側ごとに違う（create は 'draft' を補い、update / preview は
+# defined のときだけ設定する）ため、ここでは undef を補わない。
+sub _status_id {
+    my ($status) = @_;
+    return (defined $status && $status eq 'publish') ? MT::Entry::RELEASE() : MT::Entry::HOLD();
+}
+
+# 文字数上限で打ち切る。戻り値は ($text, $truncated)。
+# JSON boolean 化は出力の形を変えないよう呼び出し側に残す。
+sub _truncate {
+    my ($text, $max) = @_;
+    return ($text, 0) if !defined $text || length($text) <= $max;
+    return (substr($text, 0, $max), 1);
+}
+
 sub remove {
     my ($app, $args) = @_;
     my $entry_id = $args->{entry_id} or die "entry_id is required\n";
@@ -94,7 +111,7 @@ sub create {
     $entry->blog_id($blog_id);
     $entry->title($title);
     $entry->text($args->{body} // '');
-    $entry->status(($args->{status}//'draft') eq 'publish' ? MT::Entry::RELEASE() : MT::Entry::HOLD());
+    $entry->status(_status_id($args->{status} // 'draft'));
     my $author_id = $args->{author_id};
     unless ($author_id) {
         my $user = eval { $app->user };
@@ -114,7 +131,7 @@ sub update {
     $entry->title($args->{title}) if defined $args->{title};
     $entry->text($args->{body})   if defined $args->{body};
     if (defined $args->{status}) {
-        $entry->status($args->{status} eq 'publish' ? MT::Entry::RELEASE() : MT::Entry::HOLD());
+        $entry->status(_status_id($args->{status}));
     }
     $entry->save or die $entry->errstr . "\n";
     return { entry_id => $entry->id, status => 'updated', title => $entry->title };
@@ -148,7 +165,7 @@ sub preview {
         $preview->excerpt($args->{excerpt})   if defined $args->{excerpt};
         $preview->convert_breaks($args->{convert_breaks}) if defined $args->{convert_breaks};
         if (defined $args->{status}) {
-            $preview->status($args->{status} eq 'publish' ? MT::Entry::RELEASE() : MT::Entry::HOLD());
+            $preview->status(_status_id($args->{status}));
         }
         $entry = $preview;
     }
@@ -164,7 +181,7 @@ sub preview {
             defined $args->{convert_breaks} ? $args->{convert_breaks} : $blog->convert_paras
         );
         if (defined $args->{status}) {
-            $entry->status($args->{status} eq 'publish' ? MT::Entry::RELEASE() : MT::Entry::HOLD());
+            $entry->status(_status_id($args->{status}));
         }
         else {
             $entry->status(MT::Entry::HOLD());
@@ -217,11 +234,8 @@ sub preview {
         die "テンプレートのビルドに失敗しました: $err\n";
     }
 
-    my $truncated = 0;
-    if (length($output) > PREVIEW_MAX_CHARS) {
-        $output    = substr($output, 0, PREVIEW_MAX_CHARS);
-        $truncated = 1;
-    }
+    my $truncated;
+    ($output, $truncated) = _truncate($output, PREVIEW_MAX_CHARS);
 
     my $id = $entry->id;
     return {
@@ -245,11 +259,8 @@ sub export {
     MTMCP::Perm::require_blog_permission($app, $blog_id, 'export_blog', 'ブログのエクスポート');
 
     my $body = _to_mt_export($entry);
-    my $truncated = 0;
-    if (length($body) > EXPORT_MAX_CHARS) {
-        $body      = substr($body, 0, EXPORT_MAX_CHARS);
-        $truncated = 1;
-    }
+    my $truncated;
+    ($body, $truncated) = _truncate($body, EXPORT_MAX_CHARS);
     return {
         entry_id  => $entry->id,
         blog_id   => $blog_id,
@@ -264,8 +275,7 @@ sub _to_mt_export {
     my ($entry) = @_;
     my $author_name = 'author';
     if (my $aid = $entry->author_id) {
-        require MT::Author;
-        my $author = eval { MT::Author->load($aid) };
+        my $author = MTMCP::Author::load_cached($aid);
         $author_name = $author->name if $author && defined $author->name && $author->name ne '';
     }
 
@@ -278,12 +288,11 @@ sub _to_mt_export {
         'DATE: ' . _export_date($entry->authored_on),
     );
 
-    my @placements = eval { MT::Placement->load({ entry_id => $entry->id }) };
-    if (@placements) {
-        require MT::Category;
+    my ($placements, $cat_by_id) = _load_entry_categories($entry->id);
+    if (@$placements) {
         my $primary_done = 0;
-        for my $p (@placements) {
-            my $cat = MT::Category->load($p->category_id) or next;
+        for my $p (@$placements) {
+            my $cat = $cat_by_id->{ $p->category_id // '' } or next;
             my $class = eval { $cat->class } // 'category';
             next if $class eq 'folder';
             my $label = $cat->label // '';
@@ -304,6 +313,34 @@ sub _to_mt_export {
     }
     push @lines, '--------';
     return join("\n", @lines) . "\n";
+}
+
+# 記事1件ぶんの placement と、そこから参照されるカテゴリをまとめて引く。
+# placement 1件ごとに MT::Category->load を撃つと N+1 になるため、
+# category_id を集めてから { id => \@ids }（IN 相当）で1回だけロードする。
+# 返り値は (placements の配列参照, category_id => MT::Category のハッシュ参照)。
+# mt_category は Category と Folder で共有されるが、ID 直指定なので class は絞らない。
+# folder を落とすかどうかは呼び出し側の責務。
+sub _load_entry_categories {
+    my ($entry_id) = @_;
+    my @placements = eval { MT::Placement->load({ entry_id => $entry_id }) };
+    return ([], {}) unless @placements;
+
+    my (@ids, %seen);
+    for my $p (@placements) {
+        my $cid = $p->category_id;
+        next unless defined $cid;
+        next if $seen{$cid}++;
+        push @ids, $cid;
+    }
+    return (\@placements, {}) unless @ids;
+
+    require MT::Category;
+    my %cat_by_id;
+    for my $cat (MT::Category->load({ id => \@ids })) {
+        $cat_by_id{ $cat->id } = $cat;
+    }
+    return (\@placements, \%cat_by_id);
 }
 
 sub _export_date {
@@ -329,10 +366,6 @@ sub import_entries {
 
     MTMCP::Args::require_confirm($args, "記事を一括作成する破壊的操作です");
 
-    if (exists $args->{import_as_me} && !MTMCP::Args::is_true($args->{import_as_me})) {
-        die "import_as_me は常に有効です（ユーザー新規作成はしません）\n";
-    }
-
     my $body = $args->{body};
     die "body is required\n" if !defined $body || $body eq '';
 
@@ -343,7 +376,7 @@ sub import_entries {
     my $default_status = $args->{default_status} // 'draft';
     die "Unknown default_status: $default_status\n"
         unless $default_status eq 'draft' || $default_status eq 'publish';
-    my $status_id = $default_status eq 'publish' ? MT::Entry::RELEASE() : MT::Entry::HOLD();
+    my $status_id = _status_id($default_status);
 
     my $user = eval { $app->user };
     die "認証されていないため、この操作を行えません\n"
@@ -354,6 +387,7 @@ sub import_entries {
     die "importable entries not found\n" unless @parsed;
 
     my @ids;
+    my $cat_id_by_label;    # 最初に categories を持つ item が来たときだけ1回作る
     for my $item (@parsed) {
         my $entry = MT::Entry->new;
         $entry->blog_id($blog_id);
@@ -369,17 +403,14 @@ sub import_entries {
         $entry->save or die $entry->errstr . "\n";
 
         if ($item->{categories} && @{ $item->{categories} }) {
-            require MT::Category;
+            $cat_id_by_label ||= _category_id_by_label($blog_id);
             my @cat_ids;
             my %seen;
             for my $label (@{ $item->{categories} }) {
-                my $cat = MT::Category->load({
-                    blog_id => $blog_id,
-                    label   => $label,
-                    class   => 'category',
-                }) or next;
-                next if $seen{ $cat->id }++;
-                push @cat_ids, $cat->id;
+                my $cat_id = $cat_id_by_label->{$label};
+                next unless defined $cat_id;
+                next if $seen{$cat_id}++;
+                push @cat_ids, $cat_id;
             }
             _set_categories($entry, \@cat_ids) if @cat_ids;
         }
@@ -393,6 +424,22 @@ sub import_entries {
         rebuilt      => JSON::false,
         import_as_me => JSON::true,
     };
+}
+
+# インポート先ブログのカテゴリを1回だけロードして label => id を作る。
+# ラベルごとに load を撃つと、記事間で同名ラベルが出るたび同じクエリを繰り返す。
+# 同名ラベルが複数ある場合はスカラー load と同じくストア順の先頭を採用し、後勝ちで上書きしない。
+sub _category_id_by_label {
+    my ($blog_id) = @_;
+    require MT::Category;
+    my %by_label;
+    for my $cat (MT::Category->load({ blog_id => $blog_id, class => 'category' })) {
+        my $label = $cat->label;
+        next unless defined $label && $label ne '';
+        next if exists $by_label{$label};
+        $by_label{$label} = $cat->id;
+    }
+    return \%by_label;
 }
 
 sub _parse_mt_export {
@@ -440,7 +487,7 @@ sub _parse_mt_export {
                 $i++;
                 next;
             }
-            if (!defined $section && $line =~ /^(BODY|EXTENDED BODY|EXCERPT|KEYWORDS):\s*\z/) {
+            if (!defined $section && $line =~ /^(BODY|EXTENDED BODY|EXCERPT):\s*\z/) {
                 $section = $1;
                 $i++;
                 next;
@@ -499,12 +546,14 @@ sub _to_hash {
         $hash->{excerpt} = $entry->excerpt   // '';
         $hash->{more}    = $entry->text_more // '';
     }
-    my @placements = MT::Placement->load({ entry_id => $entry->id });
-    if (@placements) {
-        require MT::Category;
+    # entry_get / entry_list の出力互換のため、ここでは folder を除外しない。
+    my ($placements, $cat_by_id) = _load_entry_categories($entry->id);
+    if (@$placements) {
         $hash->{categories} = [
-            map { my $c = MT::Category->load($_->category_id); $c ? { id => $c->id, label => $c->label } : () }
-            @placements
+            map {
+                my $c = $cat_by_id->{ $_->category_id // '' };
+                $c ? { id => $c->id, label => $c->label } : ()
+            } @$placements
         ];
     }
     return $hash;

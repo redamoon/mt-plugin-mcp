@@ -186,6 +186,36 @@ sub _seed_author {
     is(length($got->{body}), 100_000, 'body は上限');
 }
 
+# 打ち切りの境界: 上限ちょうどは打ち切らず、上限+1 で打ち切る。
+{
+    MT::Entry::reset();
+    MT::Author::reset();
+    _seed_entry(id => 1, text => '');
+    my $overhead = MTMCP::Tools::Entry::export(
+        _app(id => 1, is_superuser => 1),
+        { entry_id => 1 },
+    )->{length};
+    cmp_ok($overhead, '<', 100_000, '本文以外の雛形は上限より短い');
+
+    MT::Entry::reset();
+    _seed_entry(id => 1, text => ('x' x (100_000 - $overhead)));
+    my $exact = MTMCP::Tools::Entry::export(
+        _app(id => 1, is_superuser => 1),
+        { entry_id => 1 },
+    );
+    is($exact->{length}, 100_000, '上限ちょうどの length');
+    ok(!$exact->{truncated}, '上限ちょうどは truncated が偽');
+
+    MT::Entry::reset();
+    _seed_entry(id => 1, text => ('x' x (100_001 - $overhead)));
+    my $over = MTMCP::Tools::Entry::export(
+        _app(id => 1, is_superuser => 1),
+        { entry_id => 1 },
+    );
+    is($over->{length}, 100_000, '上限+1 は上限まで打ち切る');
+    ok($over->{truncated}, '上限+1 は truncated が真');
+}
+
 {
     MT::Entry::reset();
     MT::Author::reset();
@@ -200,6 +230,68 @@ sub _seed_author {
         MTMCP::Tools::Entry::export(_app(id => 3, is_superuser => 0), { entry_id => 1 });
     };
     ok($got, 'export_blog があれば成功') or diag($@);
+}
+
+# 複数カテゴリが付いていても MT::Category->load は1回で済む（N+1 の解消）。
+{
+    MT::Entry::reset();
+    MT::Author::reset();
+    MT::Permission::reset();
+    MT::Placement::reset();
+    MT::Category::reset();
+    _seed_author();
+    _seed_entry(id => 1);
+
+    for my $spec ([ 2, 'News', 'category' ], [ 3, 'Tech', 'category' ], [ 4, 'Docs', 'folder' ]) {
+        my ($id, $label, $class) = @$spec;
+        my $c = MT::Category->new;
+        $c->id($id);
+        $c->blog_id(1);
+        $c->label($label);
+        $c->class($class);
+        $c->save;
+        my $pl = MT::Placement->new;
+        $pl->entry_id(1);
+        $pl->blog_id(1);
+        $pl->category_id($id);
+        $pl->is_primary($id == 2 ? 1 : 0);
+        $pl->save;
+    }
+
+    $MT::Category::LOAD_COUNT = 0;
+    my $got = MTMCP::Tools::Entry::export(
+        _app(id => 1, is_superuser => 1),
+        { entry_id => 1 },
+    );
+    is($MT::Category::LOAD_COUNT, 1, 'カテゴリ3件でも MT::Category->load は1回');
+    like($got->{body}, qr/^CATEGORY: News$/m, 'News が出る');
+    like($got->{body}, qr/^CATEGORY: Tech$/m, 'Tech が出る');
+    unlike($got->{body}, qr/Docs/, 'folder は除外したまま');
+    is(scalar(() = $got->{body} =~ /^PRIMARY CATEGORY: /mg), 1, 'PRIMARY CATEGORY は1行だけ');
+    like($got->{body}, qr/^PRIMARY CATEGORY: News$/m, 'PRIMARY は is_primary の placement');
+}
+
+# 参照先が消えている category_id は現行どおりスキップする。
+{
+    MT::Entry::reset();
+    MT::Author::reset();
+    MT::Permission::reset();
+    MT::Placement::reset();
+    MT::Category::reset();
+    _seed_author();
+    _seed_entry(id => 1);
+    my $pl = MT::Placement->new;
+    $pl->entry_id(1);
+    $pl->blog_id(1);
+    $pl->category_id(999);
+    $pl->is_primary(1);
+    $pl->save;
+
+    my $got = MTMCP::Tools::Entry::export(
+        _app(id => 1, is_superuser => 1),
+        { entry_id => 1 },
+    );
+    unlike($got->{body}, qr/^CATEGORY: /m, '見つからない category_id は行を出さない');
 }
 
 done_testing();
