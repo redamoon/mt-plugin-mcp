@@ -1,6 +1,6 @@
 # 対応ツール
 
-Movable Type 9 用 MCP サーバーが公開するツールの一覧と、権限・注意点です。初めて接続する手順は [getting-started.md](getting-started.md)、ユースケースは [guides.md](guides.md)、インストール詳細は [README](../README.md) です。
+Movable Type 9 用 MCP サーバーが公開するツールの一覧と、権限・注意点です。初めて接続する手順は [getting-started.md](getting-started.md)、ユースケースは [guides.md](guides.md)、インストール詳細は [README](../README.md) です。同じ運用知識を AI 向けに短くしたものが [skills/movable-type-mcp/](../skills/movable-type-mcp/) です（手順の正本は本ファイルと guides。Skill はそれを守らせるためのパッケージ）。
 
 ツール定義の正本は `plugins/MTMCP/lib/MTMCP/Protocol.pm` です。
 

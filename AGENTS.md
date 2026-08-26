@@ -24,6 +24,7 @@ t/*.t                          # ユニットテスト
 t/lib/                         # MT 本体のスタブ（実 MT は不要）
 docs/                          # ユーザー向け（getting-started / guides / developer-onboarding / tools / architecture-auth）
 tools/claude-desktop-bridge/   # Claude Desktop 用 stdio↔HTTP ブリッジ
+skills/movable-type-mcp/       # 配布用 Claude Skill（運用手順。Perl は触らない）
 ```
 
 新しい MCP ツールを足すときは、実装を `plugins/MTMCP/lib/MTMCP/Tools/` に置き、`Protocol.pm` のディスパッチ表と `_tool_definitions()` の両方に登録します。ツール名・権限の説明を変えたら [docs/tools.md](docs/tools.md) も合わせます。
@@ -84,4 +85,4 @@ prove -I plugins/MTMCP/lib -I t/lib t/folder.t t/page.t
 - 実装ロードマップ（P1/P2・ラップアップ）: [#26](https://github.com/redamoon/mt-plugin-mcp/issues/26)
 - 検討中（P3 / 後続）: [#44](https://github.com/redamoon/mt-plugin-mcp/issues/44)
 - ユーザー向け README / docs: [#41](https://github.com/redamoon/mt-plugin-mcp/issues/41)（本ファイルは [#42](https://github.com/redamoon/mt-plugin-mcp/issues/42)）
-- オンボーディング新設は #22。Claude Skill は #23。本ファイルの範囲外。
+- オンボーディング新設は #22。Claude Skill は #23（`skills/movable-type-mcp/`。運用手順は docs と揃える）。

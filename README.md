@@ -5,7 +5,7 @@ Cursor・Claude Desktop などの MCP クライアントから MT を自然言�
 
 対応ツールの一覧・権限・操作の注意は [docs/tools.md](docs/tools.md) を参照してください。認証の流れは [docs/architecture-auth.md](docs/architecture-auth.md) です。
 
-**はじめて接続する方**は [docs/getting-started.md](docs/getting-started.md) を先に読んでください（プラグイン配置 → Apache → トークン → Cursor までの推奨ルート1本です）。Nginx で動かしている場合は、この README の [Nginx の場合](#nginx-の場合) を参照してください。使い方の実例は [利用ガイド](docs/guides.md) です。プラグインを直す人は [開発者オンボーディング](docs/developer-onboarding.md) です。エージェント向けの注意は [AGENTS.md](AGENTS.md) です。
+**はじめて接続する方**は [docs/getting-started.md](docs/getting-started.md) を先に読んでください（プラグイン配置 → Apache → トークン → Cursor までの推奨ルート1本です）。Nginx で動かしている場合は、この README の [Nginx の場合](#nginx-の場合) を参照してください。接続できたあとに AI へ運用手順を渡す場合は [Claude Skill](#5-claude-skill-を入れる推奨) です。使い方の実例は [利用ガイド](docs/guides.md) です。プラグインを直す人は [開発者オンボーディング](docs/developer-onboarding.md) です。エージェント向けの注意は [AGENTS.md](AGENTS.md) です。
 
 ## 動作環境
 
@@ -326,6 +326,31 @@ MTがローカルDocker等で動いていて `http://localhost:PORT` にしか�
 }
 ```
 
+### 5. Claude Skill を入れる（推奨）
+
+MCP を繋いだだけでは、下書きのまま公開ファイルを出さない・テンプレート検証を飛ばす・`rebuild_site` を先に叩く、といった操作が起きやすいです。運用手順は `skills/movable-type-mcp/` にパッケージしてあります（人間向けの正本は [docs/tools.md](docs/tools.md) と [利用ガイド](docs/guides.md)）。
+
+**順序:** MT 側プラグイン導入 → トークン発行 → クライアント接続 → この Skill。Skill だけでは MT には繋がりません。
+
+**手動コピー（Claude Code / Claude Desktop）**
+
+```bash
+cp -r skills/movable-type-mcp ~/.claude/skills/
+```
+
+Cursor でリポジトリを開いている場合は、クローンした `skills/movable-type-mcp` をそのままでも読めます。個人スキルにするなら `~/.cursor/skills/` へ同じディレクトリをコピーします。
+
+**Claude Code プラグイン（marketplace）**
+
+このリポジトリ自体が marketplace です。`.mcp.json` は同梱しません（接続先 URL とトークンは環境ごとに違うため）。MCP サーバーは上のクライアント設定で入れてください。
+
+```text
+/plugin marketplace add redamoon/mt-plugin-mcp
+/plugin install movable-type-mcp@mt-plugin-mcp
+```
+
+ローカルクローンから入れる場合は `marketplace add` にそのパスを渡します。
+
 ## エンドポイント
 
 | メソッド | パス | 役割 |
@@ -416,6 +441,11 @@ plugins/MTMCP/
 tools/
 └── claude-desktop-bridge/
     └── mt-mcp-bridge.js  # Claude Desktop用stdio<->HTTPブリッジ（HTTPS未対応のローカル環境向け）
+
+skills/
+└── movable-type-mcp/     # 配布用 Claude Skill（運用手順。MCP 接続設定は含まない）
+
+.claude-plugin/           # Claude Code marketplace / plugin マニフェスト（Skill 配布用）
 ```
 
 ## トラブルシューティング
@@ -473,6 +503,7 @@ prove -I plugins/MTMCP/lib -I t/lib t/folder.t t/page.t
 
 - はじめての接続: [docs/getting-started.md](docs/getting-started.md)
 - 利用ガイド: [docs/guides.md](docs/guides.md)
+- Claude Skill: [skills/movable-type-mcp/](skills/movable-type-mcp/)
 - 開発者オンボーディング: [docs/developer-onboarding.md](docs/developer-onboarding.md)
 - 実装ロードマップ: [#26](https://github.com/redamoon/mt-plugin-mcp/issues/26)
 - ドキュメント追従: [#41](https://github.com/redamoon/mt-plugin-mcp/issues/41)

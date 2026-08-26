@@ -1,0 +1,17 @@
+{
+  "name": "mt-plugin-mcp",
+  "owner": {
+    "name": "redamoon",
+    "url": "https://github.com/redamoon"
+  },
+  "metadata": {
+    "description": "Movable Type 9 用 MCP サーバー向け Claude Skill の配布カタログ"
+  },
+  "plugins": [
+    {
+      "name": "movable-type-mcp",
+      "source": "./",
+      "description": "MT MCP の運用知識（下書き→再構築、テンプレ検証ループ、スコープを絞った再構築、削除前確認）"
+    }
+  ]
+}
