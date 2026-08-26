@@ -1,6 +1,6 @@
 # 利用ガイド
 
-接続済みの人が、AI に何を頼むかの実例です。ツールの引数・権限の正本は [tools.md](tools.md) です。まだ接続していない場合は [getting-started.md](getting-started.md) から始めてください。
+接続済みの人が、AI に何を頼むかの実例です。ツールの引数・権限の正本は [tools.md](tools.md) です。AI に同じ手順を自動で守らせるパッケージは [Claude Skill](../README.md#5-claude-skill-を入れる推奨)（`skills/movable-type-mcp/`）です。まだ接続していない場合は [getting-started.md](getting-started.md) から始めてください。
 
 ## ガイド一覧
 

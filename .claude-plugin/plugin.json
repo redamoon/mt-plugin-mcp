@@ -1,0 +1,11 @@
+{
+  "name": "movable-type-mcp",
+  "description": "Movable Type MCP の運用知識（下書き→再構築、テンプレート検証ループ、削除前確認）。MT の記事・テンプレート・コンテンツデータを MCP で操作するときに使う。",
+  "version": "0.1.0",
+  "author": {
+    "name": "redamoon",
+    "url": "https://github.com/redamoon"
+  },
+  "homepage": "https://github.com/redamoon/mt-plugin-mcp",
+  "repository": "https://github.com/redamoon/mt-plugin-mcp"
+}

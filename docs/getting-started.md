@@ -93,6 +93,8 @@ curl で同じことを確認する場合は [README の疎通確認](../README.
 
 ## 次にすること
 
+接続できたあと、AI に運用手順（下書き→再構築、テンプレ検証ループ、削除前確認）を守らせるなら [Claude Skill](../README.md#5-claude-skill-を入れる推奨) を入れてください。
+
 - [記事を作る](guides/create-entry.md)
 - [コンテンツタイプを作る / データを投入する](guides/create-content-type.md)
 - [テンプレートを直す](guides/edit-template.md)
