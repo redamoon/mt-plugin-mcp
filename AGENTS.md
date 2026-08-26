@@ -38,7 +38,7 @@ skills/movable-type-mcp/       # 配布用 Claude Skill（運用手順。Perl �
 | モジュール | 主なツール | テスト |
 | --- | --- | --- |
 | `Tools/Blog.pm` | `blog_list` | （一覧のみ。専用テストなし） |
-| `Tools/Entry.pm` | `entry_*` / `entry_preview` | `t/entry_class_filter.t` `t/entry_preview.t` `t/keyword_search.t` |
+| `Tools/Entry.pm` | `entry_*` / `entry_preview` / `entry_export` / `entry_import` | `t/entry_class_filter.t` `t/entry_preview.t` `t/entry_export.t` `t/entry_import.t` `t/keyword_search.t` |
 | `Tools/Page.pm` | `page_*` / `page_preview` | `t/page.t` |
 | `Tools/Folder.pm` | `folder_*` | `t/folder.t` |
 | `Tools/Category.pm` | `category_*` | `t/category_write.t` |
@@ -49,7 +49,7 @@ skills/movable-type-mcp/       # 配布用 Claude Skill（運用手順。Perl �
 | `Tools/TemplateMap.pm` | `templatemap_*` | `t/templatemap.t` |
 | `Tools/Widget.pm` | `widgetset_*` / `widget_list` | `t/widgetset.t` |
 | `Tools/Log.pm` | `log_list` / `log_get` | `t/log_tools.t` |
-| `Tools/User.pm` | `user_list` / `get` / `create` / `delete` / `unlock` / `recover_password` | `t/user_tools.t` |
+| `Tools/User.pm` | `user_list` / `get` / `create` / `update` / `delete` / `unlock` / `recover_password` | `t/user_tools.t` |
 | `Tools/Rebuild.pm` | `rebuild_*` | （専用テストなし。Page は `t/page.t` で触れる） |
 | `Tools/ContentType.pm` | `content_type_*` | `t/content_type_categories_field.t` |
 | `Tools/ContentData.pm` | `content_data_*` | （専用テストなし） |
@@ -76,8 +76,8 @@ prove -I plugins/MTMCP/lib -I t/lib t/folder.t t/page.t
 
 ## やってはいけないこと
 
-- **P3 と後続の実装を勝手に進めない。** 対象は [#44](https://github.com/redamoon/mt-plugin-mcp/issues/44): サイト CRUD（#9）、Stats（#18）、`blog_backup`（#20）、データ移行本体（#21）、`user_update`（#38）、`page_delete` 時の公開ファイル削除（#39）、`entry_import` / `entry_export`（#40）。本体（Data API など）の動きを見てから判断する。
-- **NOT_PLANNED を再オープンしない。** ロール・権限・グループ（#11）、テーマ（#16）、プラグイン管理（#17）は、必要になったら新規起票する。
+- **P3 の実装を勝手に進めない。** 対象は [#44](https://github.com/redamoon/mt-plugin-mcp/issues/44): Stats（#18）、`blog_backup`（#20）、データ移行本体（#21）。本体（Data API など）の動きを見てから判断する。
+- **NOT_PLANNED を再オープンしない。** サイト CRUD（#9）、ロール・権限・グループ（#11）、テーマ（#16）、プラグイン管理（#17）は、必要になったら新規起票する。
 - **secrets をコミットしない。** `.env`、トークン、パスワード、実サイトの認証情報。
 - **force-push しない。** `main` への force-push は特にしない。
 - **スカラー `MT::*->load($id)` は class/type が絡むと使わない。** Entry と Page、Category と Folder など。ハッシュ条件で `class` を明示する（#24 の方針）。
@@ -87,6 +87,6 @@ prove -I plugins/MTMCP/lib -I t/lib t/folder.t t/page.t
 ## 関連
 
 - 実装ロードマップ（P1/P2・ラップアップ）: [#26](https://github.com/redamoon/mt-plugin-mcp/issues/26)
-- 検討中（P3 / 後続）: [#44](https://github.com/redamoon/mt-plugin-mcp/issues/44)
+- 検討中（P3）: [#44](https://github.com/redamoon/mt-plugin-mcp/issues/44)
 - ユーザー向け README / docs: [#41](https://github.com/redamoon/mt-plugin-mcp/issues/41)（本ファイルは [#42](https://github.com/redamoon/mt-plugin-mcp/issues/42)）
 - オンボーディング新設は #22。Claude Skill は #23（`skills/movable-type-mcp/`。運用手順は docs と揃える）。
