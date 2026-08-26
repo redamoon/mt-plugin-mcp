@@ -7,6 +7,7 @@ use MT::Entry;
 use MT::Placement;
 use MTMCP::Perm;
 use MTMCP::Search;
+use MTMCP::Args;
 
 use constant PREVIEW_MAX_CHARS => 100_000;
 use constant EXPORT_MAX_CHARS  => 100_000;
@@ -326,10 +327,9 @@ sub import_entries {
     die "ImportPath は使えません。MT 形式の本文を body に渡してください\n"
         if exists $args->{import_path} || exists $args->{ImportPath} || exists $args->{file};
 
-    die "confirm: true が必要です（記事を一括作成する破壊的操作です）\n"
-        unless _is_true($args->{confirm});
+    MTMCP::Args::require_confirm($args, "記事を一括作成する破壊的操作です");
 
-    if (exists $args->{import_as_me} && !_is_true($args->{import_as_me})) {
+    if (exists $args->{import_as_me} && !MTMCP::Args::is_true($args->{import_as_me})) {
         die "import_as_me は常に有効です（ユーザー新規作成はしません）\n";
     }
 
@@ -393,14 +393,6 @@ sub import_entries {
         rebuilt      => JSON::false,
         import_as_me => JSON::true,
     };
-}
-
-sub _is_true {
-    my ($v) = @_;
-    return 0 unless defined $v;
-    return 0 if !$v;
-    return 0 if !ref($v) && lc($v) eq 'false';
-    return 1;
 }
 
 sub _parse_mt_export {

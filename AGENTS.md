@@ -16,6 +16,7 @@ plugins/MTMCP/                 # プラグイン本体（MT の plugins/ へコ�
     Perm.pm                    # ブログ単位・システム権限
     Protocol.pm                # MCP JSON-RPC。ツール名 → Tools::* の正本
     Search.pm                  # keyword の DB LIKE
+    Args.pm                    # bool 引数の判定・confirm 必須チェック
     CMS/Token.pm               # 管理画面からのトークン発行
     CMS/Authorize.pm           # OAuth 認可（consent）
     Tools/*.pm                 # ツール実装
@@ -51,6 +52,7 @@ tools/claude-desktop-bridge/   # Claude Desktop 用 stdio↔HTTP ブリッジ
 | `Tools/ContentType.pm` | `content_type_*` | `t/content_type_categories_field.t` |
 | `Tools/ContentData.pm` | `content_data_*` | （専用テストなし） |
 | `Search.pm` | `keyword` の LIKE | `t/keyword_search.t` `t/search_helper.t` |
+| `Args.pm` | bool 引数の判定 / confirm 必須チェック | `t/args.t` |
 | `Perm.pm` | 権限チェック | `t/perm_log_view.t` |
 
 ツールを追加・変更したら、対応する `t/*.t` を足すか更新します。スタブが足りないときは `t/lib/MT/` に最小限のモックを置きます（本番の MT コアをコピーしない）。
