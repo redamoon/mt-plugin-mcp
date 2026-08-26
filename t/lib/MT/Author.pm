@@ -18,6 +18,9 @@ our @REMOVED;
 our $LAST_LOAD_TERMS;
 our $LAST_LOAD_ARGS;
 
+# load の呼び出し回数。メモ化が効いているかをテストから検証するために数える。
+our $LOAD_COUNT = 0;
+
 sub reset {
     %STORE           = ();
     $NEXT_ID         = 1;
@@ -25,6 +28,7 @@ sub reset {
     @REMOVED         = ();
     $LAST_LOAD_TERMS = undef;
     $LAST_LOAD_ARGS  = undef;
+    $LOAD_COUNT      = 0;
 }
 
 sub new {
@@ -56,6 +60,7 @@ sub load {
     my ($class, $terms, $args) = @_;
     $LAST_LOAD_TERMS = $terms;
     $LAST_LOAD_ARGS  = $args;
+    $LOAD_COUNT++;
 
     my @objs = values %STORE;
 
