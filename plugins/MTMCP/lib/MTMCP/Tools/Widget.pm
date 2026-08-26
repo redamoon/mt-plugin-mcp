@@ -4,6 +4,7 @@ use warnings;
 use utf8;
 use MT::Template;
 use MTMCP::Perm;
+use MTMCP::Args;
 
 # ウィジェットセット（type=widgetset）の CRUD と、ウィジェット一覧。
 # 個別ウィジェット本文の CRUD は template_*（type: widget）に任せる。
@@ -87,6 +88,7 @@ sub update {
 sub remove {
     my ($app, $args) = @_;
     my $ws_id = $args->{widgetset_id} or die "widgetset_id is required\n";
+    MTMCP::Args::require_confirm($args, "ウィジェットセットを削除する取り消せない操作です");
     my $tmpl  = _load_widgetset($ws_id);
     MTMCP::Perm::require_blog_permission($app, $tmpl->blog_id, 'edit_templates', 'テンプレートの編集');
     my $name = $tmpl->name;

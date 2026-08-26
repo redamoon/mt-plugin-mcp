@@ -86,6 +86,7 @@ sub _truncate {
 sub remove {
     my ($app, $args) = @_;
     my $entry_id = $args->{entry_id} or die "entry_id is required\n";
+    MTMCP::Args::require_confirm($args, "記事を削除する取り消せない操作です");
     my $entry = _load_entry($entry_id) or die "Entry not found: $entry_id\n";
     MTMCP::Perm::require_blog_access($app, $entry->blog_id);
     my $title = $entry->title;

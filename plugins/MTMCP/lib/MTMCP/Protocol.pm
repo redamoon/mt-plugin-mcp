@@ -208,12 +208,13 @@ sub _tool_definitions {
         },
         {
             name        => 'entry_delete',
-            description => '記事を削除する。取り消せない。DeleteFilesAtRebuild が有効なら Individual アーカイブの公開ファイルも削除する。無効なら公開ディレクトリに HTML が残ることがある。',
+            description => '記事を削除する。取り消せない。DeleteFilesAtRebuild が有効なら Individual アーカイブの公開ファイルも削除する。無効なら公開ディレクトリに HTML が残ることがある。confirm: true 必須。',
             inputSchema => {
                 type     => 'object',
-                required => ['entry_id'],
+                required => ['entry_id', 'confirm'],
                 properties => {
                     entry_id => { type => 'integer', description => '削除する記事のID' },
+                    confirm => { type => 'boolean', description => 'true のときだけ実行する（取り消せない操作の確認）' },
                 },
             },
         },
@@ -327,12 +328,13 @@ sub _tool_definitions {
         },
         {
             name        => 'page_delete',
-            description => '固定ページを削除する。取り消せない。DeleteFilesAtRebuild が有効なら Page アーカイブの公開ファイルも削除する。無効なら公開ディレクトリに HTML が残ることがある。',
+            description => '固定ページを削除する。取り消せない。DeleteFilesAtRebuild が有効なら Page アーカイブの公開ファイルも削除する。無効なら公開ディレクトリに HTML が残ることがある。confirm: true 必須。',
             inputSchema => {
                 type     => 'object',
-                required => ['page_id'],
+                required => ['page_id', 'confirm'],
                 properties => {
                     page_id => { type => 'integer', description => '削除する固定ページのID' },
+                    confirm => { type => 'boolean', description => 'true のときだけ実行する（取り消せない操作の確認）' },
                 },
             },
         },
@@ -406,12 +408,13 @@ sub _tool_definitions {
         },
         {
             name        => 'category_delete',
-            description => 'カテゴリを削除する。取り消せない操作なので、実行前に対象を確認すること。子カテゴリは親へ繰り上がる。記事カテゴリは delete_category、セット内は manage_category_set。公開ファイルは自動再構築しない（必要なら rebuild_site の archive_type Category）。',
+            description => 'カテゴリを削除する。取り消せない操作なので、実行前に対象を確認すること。子カテゴリは親へ繰り上がる。記事カテゴリは delete_category、セット内は manage_category_set。公開ファイルは自動再構築しない（必要なら rebuild_site の archive_type Category）。confirm: true 必須。',
             inputSchema => {
                 type     => 'object',
-                required => ['category_id'],
+                required => ['category_id', 'confirm'],
                 properties => {
                     category_id => { type => 'integer', description => '削除するカテゴリのID' },
+                    confirm => { type => 'boolean', description => 'true のときだけ実行する（取り消せない操作の確認）' },
                 },
             },
         },
@@ -476,12 +479,13 @@ sub _tool_definitions {
         },
         {
             name        => 'category_set_delete',
-            description => 'カテゴリセットを削除する。取り消せない。配下カテゴリも削除される。コンテンツタイプの categories フィールドがこのセットを参照していてもコアはブロックしないため、削除前に content_type_get で参照の有無を確認すること。権限は manage_category_set。',
+            description => 'カテゴリセットを削除する。取り消せない。配下カテゴリも削除される。コンテンツタイプの categories フィールドがこのセットを参照していてもコアはブロックしないため、削除前に content_type_get で参照の有無を確認すること。権限は manage_category_set。confirm: true 必須。',
             inputSchema => {
                 type     => 'object',
-                required => ['category_set_id'],
+                required => ['category_set_id', 'confirm'],
                 properties => {
                     category_set_id => { type => 'integer', description => '削除するカテゴリセットのID' },
+                    confirm => { type => 'boolean', description => 'true のときだけ実行する（取り消せない操作の確認）' },
                 },
             },
         },
@@ -512,13 +516,14 @@ sub _tool_definitions {
         },
         {
             name        => 'tag_delete',
-            description => '指定サイトからタグを外す。取り消せない操作なので、実行前に対象のタグを確認すること。関連する記事・ページ・アセット・コンテンツデータから外れる。他サイトで使われていればタグマスタは残る。公開ファイルは自動再構築しない。権限はタグの削除（remove_tag）。',
+            description => '指定サイトからタグを外す。取り消せない操作なので、実行前に対象のタグを確認すること。関連する記事・ページ・アセット・コンテンツデータから外れる。他サイトで使われていればタグマスタは残る。公開ファイルは自動再構築しない。権限はタグの削除（remove_tag）。confirm: true 必須。',
             inputSchema => {
                 type     => 'object',
-                required => ['blog_id', 'tag_id'],
+                required => ['blog_id', 'tag_id', 'confirm'],
                 properties => {
                     blog_id => { type => 'integer', description => 'ブログID' },
                     tag_id  => { type => 'integer', description => '外すタグのID（tag_list で確認）' },
+                    confirm => { type => 'boolean', description => 'true のときだけ実行する（取り消せない操作の確認）' },
                 },
             },
         },
@@ -580,12 +585,13 @@ sub _tool_definitions {
         },
         {
             name        => 'folder_delete',
-            description => 'フォルダを削除する。取り消せない。配下の固定ページは親フォルダ（なければルート）へ移る。子フォルダは親へ繰り上がる。',
+            description => 'フォルダを削除する。取り消せない。配下の固定ページは親フォルダ（なければルート）へ移る。子フォルダは親へ繰り上がる。confirm: true 必須。',
             inputSchema => {
                 type     => 'object',
-                required => ['folder_id'],
+                required => ['folder_id', 'confirm'],
                 properties => {
                     folder_id => { type => 'integer', description => '削除するフォルダのID' },
+                    confirm => { type => 'boolean', description => 'true のときだけ実行する（取り消せない操作の確認）' },
                 },
             },
         },
@@ -634,12 +640,13 @@ sub _tool_definitions {
         },
         {
             name        => 'asset_delete',
-            description => 'アセットを削除する。取り消せない操作なので、実行前に対象のアセットを確認すること。',
+            description => 'アセットを削除する。取り消せない操作なので、実行前に対象のアセットを確認すること。confirm: true 必須。',
             inputSchema => {
                 type     => 'object',
-                required => ['asset_id'],
+                required => ['asset_id', 'confirm'],
                 properties => {
                     asset_id => { type => 'integer', description => '削除するアセットのID' },
+                    confirm => { type => 'boolean', description => 'true のときだけ実行する（取り消せない操作の確認）' },
                 },
             },
         },
@@ -797,12 +804,13 @@ sub _tool_definitions {
         },
         {
             name        => 'template_delete',
-            description => 'テンプレートを削除する。取り消せない操作なので、実行前に対象のテンプレートを確認すること。',
+            description => 'テンプレートを削除する。取り消せない操作なので、実行前に対象のテンプレートを確認すること。confirm: true 必須。',
             inputSchema => {
                 type     => 'object',
-                required => ['template_id'],
+                required => ['template_id', 'confirm'],
                 properties => {
                     template_id => { type => 'integer', description => '削除するテンプレートのID' },
+                    confirm => { type => 'boolean', description => 'true のときだけ実行する（取り消せない操作の確認）' },
                 },
             },
         },
@@ -867,12 +875,13 @@ sub _tool_definitions {
         },
         {
             name        => 'templatemap_delete',
-            description => 'テンプレートマップを削除する。FileInfo は消えるが公開済み静的ファイルは残ることがある。',
+            description => 'テンプレートマップを削除する。FileInfo は消えるが公開済み静的ファイルは残ることがある。confirm: true 必須。',
             inputSchema => {
                 type     => 'object',
-                required => ['templatemap_id'],
+                required => ['templatemap_id', 'confirm'],
                 properties => {
                     templatemap_id => { type => 'integer' },
+                    confirm => { type => 'boolean', description => 'true のときだけ実行する（取り消せない操作の確認）' },
                 },
             },
         },
@@ -929,12 +938,13 @@ sub _tool_definitions {
         },
         {
             name        => 'widgetset_delete',
-            description => 'ウィジェットセットを削除する。中のウィジェット本体は消えない。',
+            description => 'ウィジェットセットを削除する。中のウィジェット本体は消えない。confirm: true 必須。',
             inputSchema => {
                 type     => 'object',
-                required => ['widgetset_id'],
+                required => ['widgetset_id', 'confirm'],
                 properties => {
                     widgetset_id => { type => 'integer' },
+                    confirm => { type => 'boolean', description => 'true のときだけ実行する（取り消せない操作の確認）' },
                 },
             },
         },
@@ -1059,12 +1069,13 @@ sub _tool_definitions {
         },
         {
             name        => 'content_data_delete',
-            description => 'コンテンツデータを削除する。取り消せない操作なので、実行前に対象のデータを確認すること。',
+            description => 'コンテンツデータを削除する。取り消せない操作なので、実行前に対象のデータを確認すること。confirm: true 必須。',
             inputSchema => {
                 type     => 'object',
-                required => ['content_data_id'],
+                required => ['content_data_id', 'confirm'],
                 properties => {
                     content_data_id => { type => 'integer', description => '削除するコンテンツデータID' },
+                    confirm => { type => 'boolean', description => 'true のときだけ実行する（取り消せない操作の確認）' },
                 },
             },
         },
@@ -1233,14 +1244,15 @@ sub _tool_definitions {
         },
         {
             name        => 'user_delete',
-            description => 'ユーザーを削除する（取り消せない）。実行前に user_get で対象を確認すること。'
+            description => 'ユーザーを削除する（取り消せない）。実行前に user_get で対象を確認すること。confirm: true 必須。'
                 . '自分自身は削除できない。対象がスーパーユーザーなら呼び出し元もスーパーユーザーである必要がある。'
                 . '権限は can_manage_users_groups。',
             inputSchema => {
                 type     => 'object',
-                required => ['user_id'],
+                required => ['user_id', 'confirm'],
                 properties => {
                     user_id => { type => 'integer', description => '削除するユーザーID（user_get で確認）' },
+                    confirm => { type => 'boolean', description => 'true のときだけ実行する（取り消せない操作の確認）' },
                 },
             },
         },

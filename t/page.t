@@ -241,7 +241,7 @@ sub _seed_category_in_folder_store {
 {
     _reset_all();
     _seed_page(id => 10, title => 'Delete me');
-    my $got = eval { MTMCP::Tools::Page::remove($app, { page_id => 10 }) };
+    my $got = eval { MTMCP::Tools::Page::remove($app, { page_id => 10, confirm => 1 }) };
     ok($got, 'page_delete は成功する') or diag($@);
     is($got->{status}, 'deleted', 'status は deleted');
     is(scalar @MT::Entry::REMOVED, 1, 'remove が呼ばれる');
@@ -253,7 +253,7 @@ sub _seed_category_in_folder_store {
     _reset_all();
     _seed_page(id => 10, title => 'Delete files');
     my $app_on = bless { config => FakeConfig->new(1) }, 'FakeApp';
-    my $got = eval { MTMCP::Tools::Page::remove($app_on, { page_id => 10 }) };
+    my $got = eval { MTMCP::Tools::Page::remove($app_on, { page_id => 10, confirm => 1 }) };
     ok($got, 'DeleteFilesAtRebuild 時も page_delete は成功') or diag($@);
     is(scalar @MT::Blog::_Publisher::REMOVED_ARCHIVE, 1, '公開アーカイブ削除を呼ぶ');
     is($MT::Blog::_Publisher::REMOVED_ARCHIVE[0]{ArchiveType}, 'Page', 'ArchiveType は Page');
@@ -264,7 +264,7 @@ sub _seed_category_in_folder_store {
     _reset_all();
     _seed_page(id => 10, title => 'Keep files');
     my $app_off = bless { config => FakeConfig->new(0) }, 'FakeApp';
-    my $got = eval { MTMCP::Tools::Page::remove($app_off, { page_id => 10 }) };
+    my $got = eval { MTMCP::Tools::Page::remove($app_off, { page_id => 10, confirm => 1 }) };
     ok($got, 'DeleteFilesAtRebuild 無効でも DB 削除は成功') or diag($@);
     is(scalar @MT::Blog::_Publisher::REMOVED_ARCHIVE, 0, '無効時は公開ファイルを消さない');
     ok(!MT::Page->load({ id => 10, class => 'page' }), 'Page はストアから消える');

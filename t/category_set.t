@@ -86,7 +86,7 @@ sub _seed_category {
     _seed_set(id => 3, name => 'ToDelete');
     _seed_category(id => 20, label => 'Child', basename => 'c', category_set_id => 3);
     _seed_category(id => 21, label => 'Keep', basename => 'k', category_set_id => 0);
-    my $got = eval { MTMCP::Tools::CategorySet::remove($app, { category_set_id => 3 }) };
+    my $got = eval { MTMCP::Tools::CategorySet::remove($app, { category_set_id => 3, confirm => 1 }) };
     ok($got, 'category_set_delete は成功する') or diag($@);
     is($got->{status}, 'deleted', 'status は deleted');
     ok(!MT::CategorySet->load({ id => 3 }), 'セットは消える');

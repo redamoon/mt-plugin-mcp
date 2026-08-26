@@ -7,6 +7,7 @@ use MT::Page;
 use MT::Placement;
 use MT::Folder;
 use MTMCP::Perm;
+use MTMCP::Args;
 
 # キーワード検索時にPerl側でスキャンする最大件数。DB側でのLIKE検索ではなく
 # 直近のレコードをこの件数までロードしてから絞り込むため、これを超えて
@@ -176,6 +177,7 @@ sub update {
 sub remove {
     my ($app, $args) = @_;
     my $page_id = $args->{page_id} or die "page_id is required\n";
+    MTMCP::Args::require_confirm($args, "固定ページを削除する取り消せない操作です");
     my $page = _load_page($page_id) or die "Page not found: $page_id\n";
     _require_manage_pages($app, $page->blog_id);
     my $title = $page->title;

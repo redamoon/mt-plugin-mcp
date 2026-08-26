@@ -50,6 +50,8 @@ sub list {
 sub remove {
     my ($app, $args) = @_;
     my $cd_id = $args->{content_data_id} or die "content_data_id is required\n";
+    require MTMCP::Args;
+    MTMCP::Args::require_confirm($args, "コンテンツデータを削除する取り消せない操作です");
     require MT::ContentData;
     require MTMCP::Perm;
     my $cd = MT::ContentData->load($cd_id) or die "ContentData not found: $cd_id\n";

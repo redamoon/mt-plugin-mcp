@@ -75,7 +75,7 @@ sub _seed_category_in_folder_store {
 {
     MT::Folder::reset();
     _seed_category_in_folder_store(id => 5);
-    my $got = eval { MTMCP::Tools::Folder::remove($app, { folder_id => 5 }) };
+    my $got = eval { MTMCP::Tools::Folder::remove($app, { folder_id => 5, confirm => 1 }) };
     my $err = $@;
     ok(!$got, 'folder_delete(カテゴリ ID) は成功しない');
     like($err, qr/Folder not found: 5/, 'folder_delete はカテゴリ ID を Folder not found にする');
@@ -194,7 +194,7 @@ sub _seed_category_in_folder_store {
 {
     MT::Folder::reset();
     _seed_folder(id => 1, label => 'Delete me', basename => 'del');
-    my $got = eval { MTMCP::Tools::Folder::remove($app, { folder_id => 1 }) };
+    my $got = eval { MTMCP::Tools::Folder::remove($app, { folder_id => 1, confirm => 1 }) };
     ok($got, 'folder_delete は成功する') or diag($@);
     is($got->{status}, 'deleted', 'status は deleted');
     is($got->{label},  'Delete me', '削除前の label を返す');

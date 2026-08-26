@@ -16,7 +16,7 @@
 | `Archive type '...' is not a chosen archive type` | そのブログで無効な `archive_type`。外すか有効な型にする |
 | `File extension not allowed` | 許可リスト外（実行可能、`.svg` など）。変換してから `asset_upload` |
 | `Entry not found`（preview など） | Page ID を記事ツールに渡している。`page_*` を使う |
-| 削除・import を急いでいる | 一覧/取得で対象を示して確認。`entry_import` は `confirm: true` なしでは動かない |
+| 削除・import を急いでいる | 一覧/取得で対象を示して確認。削除系ツールと `entry_import` は `confirm: true` なしでは動かない |
 | フィールドに値が入らない / 別欄に入る | `content_type_get` を取り直し、`fields` のキーを ID にする |
 
 原因がログに残っているときは `log_list`（`level` / `keyword`）。書き込みはできない。

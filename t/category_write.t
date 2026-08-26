@@ -113,7 +113,7 @@ sub _seed_folder_in_category_store {
 {
     _reset();
     _seed_folder_in_category_store(id => 5);
-    my $got = eval { MTMCP::Tools::Category::remove($app, { category_id => 5 }) };
+    my $got = eval { MTMCP::Tools::Category::remove($app, { category_id => 5, confirm => 1 }) };
     ok(!$got, 'category_delete(フォルダ ID) は成功しない');
     like($@, qr/Category not found: 5/, 'delete も Folder ID を not found');
     is(scalar @MT::Category::REMOVED, 0, 'delete(フォルダ ID) は削除しない');
@@ -235,7 +235,7 @@ sub _seed_folder_in_category_store {
     _reset();
     _seed_category(id => 1, label => 'Delete me', basename => 'del');
     _seed_category(id => 2, label => 'Child', basename => 'c', parent => 1);
-    my $got = eval { MTMCP::Tools::Category::remove($app, { category_id => 1 }) };
+    my $got = eval { MTMCP::Tools::Category::remove($app, { category_id => 1, confirm => 1 }) };
     ok($got, 'category_delete は成功する') or diag($@);
     is($got->{status}, 'deleted', 'status は deleted');
     is($got->{label}, 'Delete me', '削除前の label を返す');

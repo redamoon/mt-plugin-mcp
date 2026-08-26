@@ -158,6 +158,7 @@ sub update {
 sub remove {
     my ($app, $args) = @_;
     my $map_id = $args->{templatemap_id} or die "templatemap_id is required\n";
+    MTMCP::Args::require_confirm($args, "アーカイブマッピングを削除する取り消せない操作です");
     my $map    = _load_map($map_id);
     my $tmpl   = _assert_map_belongs_to_template($map);
     MTMCP::Perm::require_blog_permission($app, $tmpl->blog_id, 'edit_templates', 'テンプレートの編集');

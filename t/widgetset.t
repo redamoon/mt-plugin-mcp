@@ -336,7 +336,7 @@ sub _widget_names {
     @MT::Template::REMOVED = ();
 
     my $got = eval {
-        MTMCP::Tools::Widget::remove($app, { widgetset_id => $created->{widgetset_id} });
+        MTMCP::Tools::Widget::remove($app, { widgetset_id => $created->{widgetset_id}, confirm => 1 });
     };
     my $err = $@;
     ok($got, 'widgetset_delete は成功する') or diag($err);
@@ -351,7 +351,7 @@ sub _widget_names {
 {
     MT::Template::reset();
     my $idx = _seed_index();
-    my $got = eval { MTMCP::Tools::Widget::remove($app, { widgetset_id => $idx->id }) };
+    my $got = eval { MTMCP::Tools::Widget::remove($app, { widgetset_id => $idx->id, confirm => 1 }) };
     my $err = $@;
     ok(!$got, 'index を widgetset_delete できない');
     like($err, qr/ウィジェットセットではありません/, 'type チェック');

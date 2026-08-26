@@ -4,6 +4,7 @@ use warnings;
 use utf8;
 use MT::Author;
 use MTMCP::Perm;
+use MTMCP::Args;
 
 sub list {
     my ($app, $args) = @_;
@@ -124,6 +125,7 @@ sub remove {
     my ($app, $args) = @_;
     MTMCP::Perm::require_manage_users($app);
     my $user_id = $args->{user_id} or die "user_id is required\n";
+    MTMCP::Args::require_confirm($args, "ユーザーを削除する取り消せない操作です");
     my $user = _load_author($user_id) or die "User not found: $user_id\n";
 
     my $me = eval { $app->user };

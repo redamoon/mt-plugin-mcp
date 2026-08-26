@@ -5,6 +5,7 @@ use utf8;
 use MT::Tag;
 use MT::ObjectTag;
 use MTMCP::Perm;
+use MTMCP::Args;
 
 sub list {
     my ($app, $args) = @_;
@@ -138,6 +139,7 @@ sub remove {
     my ($app, $args) = @_;
     my $blog_id = $args->{blog_id} or die "blog_id is required\n";
     my $tag_id  = $args->{tag_id}  or die "tag_id is required\n";
+    MTMCP::Args::require_confirm($args, "サイトからタグを外す取り消せない操作です");
 
     MTMCP::Perm::require_blog_permission($app, $blog_id, 'remove_tag', 'タグの削除');
 

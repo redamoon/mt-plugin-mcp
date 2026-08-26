@@ -4,6 +4,7 @@ use warnings;
 use utf8;
 use MT::Folder;
 use MTMCP::Perm;
+use MTMCP::Args;
 
 use constant LABEL_MAX_CHARS => 100;
 
@@ -134,6 +135,7 @@ sub update {
 sub remove {
     my ($app, $args) = @_;
     my $folder_id = $args->{folder_id} or die "folder_id is required\n";
+    MTMCP::Args::require_confirm($args, "フォルダを削除する取り消せない操作です");
     my $folder = _load_folder($folder_id) or die "Folder not found: $folder_id\n";
     MTMCP::Perm::require_blog_permission($app, $folder->blog_id, 'delete_folder', 'フォルダの管理');
     my $label = $folder->label;

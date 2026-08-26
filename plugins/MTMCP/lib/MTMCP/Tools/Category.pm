@@ -4,6 +4,7 @@ use warnings;
 use utf8;
 use MT::Category;
 use MTMCP::Perm;
+use MTMCP::Args;
 
 use constant LABEL_MAX_CHARS => 100;
 
@@ -185,6 +186,7 @@ sub update {
 sub remove {
     my ($app, $args) = @_;
     my $category_id = $args->{category_id} or die "category_id is required\n";
+    MTMCP::Args::require_confirm($args, "カテゴリを削除する取り消せない操作です");
     my $cat = _require_category($category_id);
     _require_delete_perm($app, $cat);
     my $label = $cat->label;

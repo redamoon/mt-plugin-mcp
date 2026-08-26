@@ -3,6 +3,7 @@ use strict;
 use warnings;
 use MT::Asset;
 use MTMCP::Perm;
+use MTMCP::Args;
 use MTMCP::Search;
 
 my %IMAGE_EXT = map { $_ => 1 } qw(jpg jpeg png gif bmp webp);
@@ -56,6 +57,7 @@ sub get {
 sub remove {
     my ($app, $args) = @_;
     my $asset_id = $args->{asset_id} or die "asset_id is required\n";
+    MTMCP::Args::require_confirm($args, "アセットを削除する取り消せない操作です");
     my $asset = MT::Asset->load($asset_id) or die "Asset not found: $asset_id\n";
     MTMCP::Perm::require_blog_access($app, $asset->blog_id);
     my $label = $asset->label // $asset->file_name;
