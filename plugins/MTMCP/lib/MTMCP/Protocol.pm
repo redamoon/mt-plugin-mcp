@@ -101,7 +101,7 @@ sub dispatch {
         return _result($id, {
             protocolVersion => $PROTOCOL_VERSION,
             capabilities    => { tools => { listChanged => JSON::false } },
-            serverInfo      => { name => 'MT MCP Server', version => '0.7.0' },
+            serverInfo      => { name => 'MT MCP Server', version => _server_version() },
         });
     }
 
@@ -138,6 +138,12 @@ sub dispatch {
     }
 
     return _error($id, -32601, "Method not found: $method");
+}
+
+# バージョンの正本は config.yaml。ここに直書きすると更新漏れで食い違う。
+sub _server_version {
+    my $version = eval { require MT; MT->component('MTMCP')->version };
+    return defined $version && length $version ? "$version" : 'unknown';
 }
 
 sub _result { my ($id, $r) = @_; return { jsonrpc => '2.0', id => $id, result => $r } }

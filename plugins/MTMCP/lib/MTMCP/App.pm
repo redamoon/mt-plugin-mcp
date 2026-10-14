@@ -30,12 +30,23 @@ sub handle {
         });
     }
 
+    # JSON-RPC のバッチ（配列）は MCP 2025-06-18 で仕様から削除された。
+    # オブジェクト以外をそのまま dispatch に渡すと 500 になるため、ここで弾く。
+    unless (ref $req eq 'HASH') {
+        return _respond($app, 400, {
+            jsonrpc => '2.0',
+            id      => undef,
+            error   => { code => -32600, message => 'Invalid Request' },
+        });
+    }
+
     require MTMCP::Protocol;
     my $response = MTMCP::Protocol::dispatch($app, $req);
 
+    # 通知（レスポンス本文を持たない）は Streamable HTTP の仕様どおり 202 を返す。
     unless (defined $response) {
         _set_cors_headers($app);
-        $app->response_code(204);
+        $app->response_code(202);
         return '';
     }
 
