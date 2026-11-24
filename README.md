@@ -409,7 +409,7 @@ curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
 
 成功レスポンス:
 ```json
-{"id":1,"jsonrpc":"2.0","result":{"capabilities":{"tools":{"listChanged":false}},"protocolVersion":"2025-06-18","serverInfo":{"name":"MT MCP Server","version":"0.8.1"}}}
+{"id":1,"jsonrpc":"2.0","result":{"capabilities":{"tools":{"listChanged":false}},"protocolVersion":"2025-06-18","serverInfo":{"name":"MT MCP Server","version":"0.8.2"}}}
 ```
 
 ### tools/list（ツール一覧確認）
