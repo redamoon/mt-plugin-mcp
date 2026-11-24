@@ -133,6 +133,8 @@ Nginx の `client_max_body_size` 既定は 1m です。`asset_upload` は Base64
 
 MCP クライアント自体にパスワードを一切渡さない方式です。ブラウザで MT の本物のログイン画面（多要素認証や外部認証を設定していればそれも含めて）にログインし、その場で許可した MCP クライアントだけがアクセストークンを受け取れます。
 
+Claude Code で接続する場合は [ブラウザログインの手順](#claude-code-oauth) を参照してください。
+
 1. ブラウザで下記 URL を開く（`code_verifier` はクライアント側でランダムに生成し、`code_challenge = BASE64URL(SHA256(code_verifier))`）:
    ```text
    https://example.com/mt/mt.cgi?__mode=mcp_authorize
@@ -170,7 +172,9 @@ curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp/token \
 
 > `redirect_uri` は RFC 8252（ネイティブアプリ向け OAuth）の慣例に従い、次のいずれかのみ許可しています。①ループバック: `http://127.0.0.1:*` / `http://localhost:*` / `http://[::1]:*`（任意のポート）。②プライベートスキーム: `cursor://...` や `claude://...` など http/https 以外のカスタムURLスキーム（Cursor・Claude Desktop などデスクトップアプリが使用）。③既知クライアントの固定HTTPSコールバック（完全一致のみ・現状 Cursor の Background Agent 用 `https://www.cursor.com/agents/mcp/oauth/callback` のみ登録）。任意の外部Webホストへのリダイレクトはオープンリダイレクト対策のため拒否されます。認可コードの有効期限は10分・一度使うと失効します。PKCE は `S256` のみ対応（`plain` は不可）。`POST /v4/mcp/register`（Dynamic Client Registration）で登録済みの `client_id` を使う場合は、認可時の `redirect_uri` がその登録内容と完全一致することも追加で要求されます。
 >
-> Cursor / Claude Desktop など、MCP のリモートサーバー向け OAuth 自動検出（`WWW-Authenticate: Bearer resource_metadata=...` からの `.well-known` 参照）に対応したクライアントであれば、下記の静的ファイルを配置することでフローの一部を自動化できます。未対応のクライアントでは、上記の手順を独自のログインヘルパー（ブラウザを開いて `redirect_uri` でコードを受け取る小さなスクリプトなど）で実行してください。
+<a id="oauth-discovery"></a>
+
+> Cursor / Claude Code など、MCP の OAuth 自動検出（`WWW-Authenticate: Bearer resource_metadata=...` からの `.well-known` 参照）に対応したクライアントであれば、下記の静的ファイルを配置することでフローの一部を自動化できます。未対応のクライアントでは、上記の手順を独自のログインヘルパー（ブラウザを開いて `redirect_uri` でコードを受け取る小さなスクリプトなど）で実行してください。
 >
 > `https://example.com/.well-known/oauth-protected-resource`
 > ```json
@@ -274,9 +278,7 @@ MT 管理画面で **システム > プラグイン > MT MCP Server** を開き�
 
 #### Claude Desktop (`claude_desktop_config.json`)
 
-Claude Desktop のリモートコネクタにはアプリ内の設定画面からサーバーの URL を追加します。ローカル接続では `claude_desktop_config.json` に以下のブリッジを登録できます。
-
-MTサーバーがHTTPS未対応（例: ローカルDockerで `http://localhost:PORT` のみ）の場合は、コネクタUI経由でも接続できない可能性が高いです。その場合は、以下の「ローカル環境（HTTPS未対応）の場合」を参照してください。
+Claude Desktop のリモートコネクタには、Anthropic のサーバーから到達できる公開 HTTPS URL を登録します。ローカル Docker に接続する場合は `claude_desktop_config.json` に以下のブリッジを登録できます。[Claude の接続要件](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp#network-requirements)
 
 ##### ローカル環境（HTTPS未対応）の場合
 
@@ -291,7 +293,7 @@ MTがローカルDocker等で動いていて `http://localhost:PORT` にしか�
       "command": "node",
       "args": ["/absolute/path/to/mt-plugin-mcp/tools/claude-desktop-bridge/mt-mcp-bridge.js"],
       "env": {
-        "MT_MCP_URL": "http://localhost:10000/mt-data-api.cgi/v4/mcp",
+        "MT_MCP_URL": "http://localhost:10000/cgi-bin/mt/mt-data-api.cgi/v4/mcp",
         "MT_MCP_TOKEN": "<発行したトークン>"
       }
     }
@@ -304,6 +306,38 @@ MTがローカルDocker等で動いていて `http://localhost:PORT` にしか�
 - `args` のパスは絶対パスで指定してください。
 
 #### Claude Code（CLI）
+
+<a id="claude-code-oauth"></a>
+
+##### ブラウザログイン（OAuth）
+
+`docker-mt-lamp` の Apache CGI 環境を例に、ローカルの Movable Type に Streamable HTTP で接続します。
+
+1. `docker-mt-lamp/www/html/.well-known/` に [OAuth 自動検出用の2つの JSON ファイル](#oauth-discovery) を配置します。例の `https://example.com/mt/` を `http://localhost:10000/cgi-bin/mt/` に、残りの `https://example.com` を `http://localhost:10000` に置き換えてください。
+2. Claude Code で使うプロジェクトのディレクトリで MCP サーバーを登録します。登録済みの場合は手順 3 に進みます。
+
+   ```bash
+   claude mcp add --transport http --scope local movable-type-oauth \
+     http://localhost:10000/cgi-bin/mt/mt-data-api.cgi/v4/mcp
+   ```
+
+3. 次のコマンドで OAuth のブラウザログインを開始します。[Claude Code のOAuth認証](https://code.claude.com/docs/en/mcp#authenticate-from-the-command-line)
+
+   ```bash
+   claude mcp login movable-type-oauth
+   ```
+
+4. ブラウザで Movable Type にログインします。**MCPクライアントの認可**画面で、ログイン中のユーザーとリダイレクト先を確認して **許可する** を押します。
+
+   ![Movable Type の OAuth 認可画面。接続先の情報と「許可する」「拒否する」のボタンが表示される](./docs/images/claude-code-oauth-consent.png)
+
+5. ターミナルに認証完了が表示されたら、接続状態が `Connected` であることを確認します。Claude Code で「Movable Type のサイト一覧を表示して」と頼めば動作を確認できます。
+
+   ```bash
+   claude mcp get movable-type-oauth
+   ```
+
+##### 手動トークン方式
 
 `.mcp.json` に Streamable HTTP の接続先を `"type": "http"` で指定します。以下は手動で発行したトークンを使う例です。
 
