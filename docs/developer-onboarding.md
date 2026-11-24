@@ -12,7 +12,7 @@
 plugins/MTMCP/
 ├── config.yaml              # Data API ルートと CMS メソッド
 └── lib/MTMCP/
-    ├── App.pm               # /v4/mcp の SSE・JSON-RPC・トークン検証
+    ├── App.pm               # /v4/mcp の Streamable HTTP・トークン検証
     ├── Auth.pm              # POST /v4/mcp/authenticate
     ├── OAuth.pm             # /v4/mcp/token と /register
     ├── Perm.pm              # ブログ権限・システム権限
@@ -79,7 +79,8 @@ prove -I plugins/MTMCP/lib -I t/lib t/folder.t t/page.t
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer <your-token>' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl","version":"0.0.1"}}}'
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"0.0.1"}}}'
 ```
 
 成功すると `serverInfo.name` が `MT MCP Server` です。続けて `tools/list` と `blog_list` は [README の疎通確認](../README.md#疎通確認) です。

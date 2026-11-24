@@ -41,20 +41,17 @@ RewriteEngine On
 RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 ```
 
-> どちらも設定できない場合は、`Authorization` の代わりに `X-MT-Authorization: MTAuth accessToken=<token>` ヘッダーを使う方法もあります（後述「認証ヘッダー」参照）。カスタムヘッダーは Apache の追加設定なしでそのまま CGI に渡ります。
-
 ### Nginx の場合
 
 以下は **未検証の草案** です。MT の管理画面と Data API が既に Nginx で動いている前提で、MCP 向けの差分だけを書いています。OS パッケージや fcgiwrap / Starman の入れ方は [MT 本体のドキュメント](https://www.movabletype.jp/documentation/system_requirements.html) の範囲であり、ここでは扱いません。パス（`/mt/` など）は実際の `CGIPath` に合わせてください。
 
 プラグイン側の動きは Apache と同じです。変わるのは、手前のサーバーが `Authorization` を `mt-data-api.cgi` まで届ける方法です。
 
-構成は次の4つに分かれます。
+構成は次の3つに分かれます。
 
 1. **Nginx + fcgiwrap（CGI）** — `fastcgi_param HTTP_AUTHORIZATION` と PATH_INFO 付きの location
 2. **Nginx リバースプロキシ → Starman / PSGI** — [MT 公式が想定する構成](https://www.movabletype.jp/documentation/mt6/reference/psgi-plack-movable-type.html)。`proxy_set_header Authorization` を明示
 3. **Nginx リバースプロキシ → Apache** — フロントの転送 **と** バックエンド Apache の `CGIPassAuth On`（または RewriteRule）の両方が必要
-4. **nginx.conf を触れない** — 既存の `X-MT-Authorization` フォールバック（後述「認証ヘッダー」）
 
 既存の `.cgi` 用 location があるなら、それに `HTTP_AUTHORIZATION`（または `proxy_set_header Authorization`）を足してください。新しい location を丸ごと足すと、想定外の CGI まで同じ設定に巻き込まれます。
 
@@ -124,11 +121,9 @@ location /.well-known/ {
 }
 ```
 
-#### リクエストサイズと SSE
+#### リクエストサイズ
 
 Nginx の `client_max_body_size` 既定は 1m です。`asset_upload` は Base64 デコード後 20MB までで、ペイロードは最大約 27MB になるため、MCP 用 location に **32m** を推奨します。
-
-本プラグインの GET（SSE）は `event: endpoint` を1回返して終わります。長時間ストリームではないので `proxy_buffering off` は必須ではありません。`gzip off` は CGI 用 location に既に入っていることが多いです。
 
 ### 3. アクセストークンを発行
 
@@ -267,7 +262,7 @@ MT 管理画面で **システム > プラグイン > MT MCP Server** を開き�
 {
   "mcpServers": {
     "movable-type": {
-      "type": "sse",
+      "type": "http",
       "url": "https://example.com/mt/mt-data-api.cgi/v4/mcp",
       "headers": {
         "Authorization": "Bearer <発行したトークン>"
@@ -279,7 +274,7 @@ MT 管理画面で **システム > プラグイン > MT MCP Server** を開き�
 
 #### Claude Desktop (`claude_desktop_config.json`)
 
-**実機確認の結果、`claude_desktop_config.json` はこのような `type`/`url`/`headers` 形式のリモートMCPサーバー定義をサポートしていません。** 該当エントリは「有効なMCPサーバー設定ではない」として無視されます。Claude Desktopでリモート（HTTP/SSE）のMCPサーバーを使う場合は、この設定ファイルを直接編集するのではなく、アプリ内の「設定 → コネクタ」のようなUIから追加する必要があるとみられます（具体的な手順はバージョンにより異なる可能性があり、本READMEでは検証できていません）。
+Claude Desktop のリモートコネクタにはアプリ内の設定画面からサーバーの URL を追加します。ローカル接続では `claude_desktop_config.json` に以下のブリッジを登録できます。
 
 MTサーバーがHTTPS未対応（例: ローカルDockerで `http://localhost:PORT` のみ）の場合は、コネクタUI経由でも接続できない可能性が高いです。その場合は、以下の「ローカル環境（HTTPS未対応）の場合」を参照してください。
 
@@ -310,13 +305,13 @@ MTがローカルDocker等で動いていて `http://localhost:PORT` にしか�
 
 #### Claude Code（CLI）
 
-`.mcp.json` またはプロジェクト設定でリモートMCPサーバーを直接指定できます。MTがHTTPS対応の公開URLを持つ場合は、Cursorと同様の方法A/Bの設定で動作する可能性があります（未検証）。ローカルDocker等でHTTPS未対応の場合は、上記のブリッジスクリプトを `command`/`args` で指定する方法が使えます。
+`.mcp.json` に Streamable HTTP の接続先を `"type": "http"` で指定します。以下は手動で発行したトークンを使う例です。
 
 ```json
 {
   "mcpServers": {
     "movable-type": {
-      "type": "sse",
+      "type": "http",
       "url": "https://example.com/mt/mt-data-api.cgi/v4/mcp",
       "headers": {
         "Authorization": "Bearer <発行したトークン>"
@@ -360,16 +355,11 @@ Cursor でリポジトリを開いている場合は、クローンした `skill
 | `POST` | `/mt-data-api.cgi/v4/mcp/token` | OAuth トークンエンドポイント（`grant_type=authorization_code`：認可コード+PKCE→トークン／`grant_type=refresh_token`：リフレッシュトークン→新トークン） |
 | `POST` | `/mt-data-api.cgi/v4/mcp/authenticate` | ユーザー名・パスワードでログインし、アクセストークンを発行 |
 | `POST` | `/mt-data-api.cgi/v4/mcp/register` | Dynamic Client Registration（`client_id` 発行。client_secret は出さない） |
-| `GET` | `/mt-data-api.cgi/v4/mcp` | SSE 接続（クライアントが POST 先 URL を受け取る） |
-| `POST` | `/mt-data-api.cgi/v4/mcp` | JSON-RPC リクエストの送受信 |
+| `GET` | `/mt-data-api.cgi/v4/mcp` | `405 Method Not Allowed` |
+| `POST` | `/mt-data-api.cgi/v4/mcp` | Streamable HTTP。JSON-RPC リクエストには JSON、受理した通知には本文なしの `202 Accepted` を返す |
 | `OPTIONS` | `/mt-data-api.cgi/v4/mcp` | CORS プリフライト |
 
-認証ヘッダー（いずれか）：
-
-| ヘッダー | 値 | サーバ設定 | 備考 |
-|---|---|---|---|
-| `Authorization` | `Bearer <token>` | Apache: `CGIPassAuth On` または RewriteRule。Nginx: `fastcgi_param HTTP_AUTHORIZATION` または `proxy_set_header Authorization`（[Nginx の場合](#nginx-の場合)） | Cursor / Claude Desktop で動作確認済（Apache） |
-| `X-MT-Authorization` | `MTAuth accessToken=<token>` | Apache / Nginx とも追加設定不要 | サーバ設定を変更できない環境向け |
+MCP の POST には `Authorization: Bearer <token>` を送ります。ヘッダーを MT に届けるため、[Apache の設定](#2-apache-の設定) または [Nginx の設定](#nginx-の場合) を確認してください。
 
 ## 疎通確認
 
@@ -378,13 +368,14 @@ Cursor でリポジトリを開いている場合は、クローンした `skill
 ```bash
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
   -H 'Authorization: Bearer <your-token>' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl","version":"0.0.1"}}}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"0.0.1"}}}'
 ```
 
 成功レスポンス:
 ```json
-{"id":1,"jsonrpc":"2.0","result":{"capabilities":{"tools":{"listChanged":false}},"protocolVersion":"2024-11-05","serverInfo":{"name":"MT MCP Server","version":"0.8.1"}}}
+{"id":1,"jsonrpc":"2.0","result":{"capabilities":{"tools":{"listChanged":false}},"protocolVersion":"2025-06-18","serverInfo":{"name":"MT MCP Server","version":"0.8.1"}}}
 ```
 
 ### tools/list（ツール一覧確認）
@@ -392,6 +383,8 @@ curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
 ```bash
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'MCP-Protocol-Version: 2025-06-18' \
   -H 'Authorization: Bearer <your-token>' \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 ```
@@ -401,6 +394,8 @@ curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
 ```bash
 curl -X POST https://example.com/mt/mt-data-api.cgi/v4/mcp \
   -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'MCP-Protocol-Version: 2025-06-18' \
   -H 'Authorization: Bearer <your-token>' \
   -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"blog_list","arguments":{}}}'
 ```
@@ -412,7 +407,7 @@ plugins/MTMCP/
 ├── config.yaml
 └── lib/
     └── MTMCP/
-        ├── App.pm          # Data API ハンドラ・トークン検証・SSE
+        ├── App.pm          # Streamable HTTP ハンドラ・トークン検証
         ├── Auth.pm         # ログインAPI（ユーザー名/パスワード → トークン発行）・失敗ロックアウト
         ├── OAuth.pm        # OAuth 2.1（認可コード + PKCE）トークンエンドポイント・検証ロジック
         ├── Perm.pm         # ブログ単位・システム権限（ログ閲覧・ユーザー管理）のチェック
@@ -453,10 +448,10 @@ skills/
 | 症状 | 原因 | 対処 |
 |---|---|---|
 | `401 Unauthorized` | トークンが無効または期限切れ | MT 管理画面でトークンを再発行 |
-| `401 Unauthorized`（Nginx） | `Authorization` が FastCGI / upstream に届いていない | `fastcgi_param HTTP_AUTHORIZATION $http_authorization;` または `proxy_set_header Authorization $http_authorization;`。触れない場合は `X-MT-Authorization` |
+| `401 Unauthorized`（Nginx） | `Authorization` が FastCGI / upstream に届いていない | `fastcgi_param HTTP_AUTHORIZATION $http_authorization;` または `proxy_set_header Authorization $http_authorization;` |
 | `404` on `/v4/mcp`（Nginx） | `location` が `.cgi$` のみ、または `location /mt/` なのに CGIPath が `/` | fcgiwrap なら `.cgi(/|$)` と `PATH_INFO`。Starman / リバースプロキシなら `location` を実際の CGIPath に合わせる |
 | `413 Request Entity Too Large` | Nginx の `client_max_body_size` 既定が 1m | MCP 用 location に `client_max_body_size 32m;`（`asset_upload` の Base64 ペイロードは最大約 27MB）。`server` 全体に書かない |
-| `SSE error: Non-200 status code (404)` | GET エンドポイントが未登録（旧バージョン） | プラグインを最新版に更新し MT を再起動 |
+| 接続時に `SSE error` | クライアントが旧 HTTP+SSE 方式で接続している | 接続設定の `"type"` を `"http"` に変更し、同じ `/v4/mcp` の URL に再接続 |
 | ツール説明が文字化けする | JSON エンコーダの設定不備（旧バージョン） | プラグインを最新版に更新し MT を再起動 |
 | `Unknown endpoint` | プラグインのキャッシュが古い | MT 管理画面でプラグインを無効→有効に切り替え |
 | `500 Can't locate JSON/XS.pm` | JSON::XS が未インストール | 不要（本プラグインは `JSON` モジュールを使用） |

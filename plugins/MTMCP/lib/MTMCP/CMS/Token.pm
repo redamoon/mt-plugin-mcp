@@ -29,16 +29,21 @@ sub generate {
         return $json->encode({ error => 'Could not generate token' });
     }
 
-    return $json->encode({ token => $token, mcp_url => _mcp_url($app) });
+    my $url = _mcp_url($app);
+    return $json->encode({
+        token      => $token,
+        mcp_url    => $url,
+        mcp_config => _mcp_config($url, $token),
+    });
 }
 
-# Cursor / Claude Desktop の mcp.json にそのまま貼れる完成形JSONを組み立てる
+# Cursor / Claude Code に貼り付ける接続設定を組み立てる
 # ため、MCP エンドポイント（mt-data-api.cgi 側）の絶対URLをサーバー側で
 # 算出する。CMSアプリ（mt.cgi）自身のURLからは組み立てられないため、
 # MT の設定値（CGIPath / DataAPIScript）から直接構築する。
 # CGIPath はホスト名を含まない相対パス（例: /cgi-bin/）を指定することも
 # 許容されており、その場合は現在のリクエストのオリジン（$app->base）を
-# 前置して絶対URLにする（App.pm の handle_sse が組み立てる URL と一致させる）。
+# 前置して絶対URLにする。
 sub _mcp_url {
     my ($app) = @_;
     require MT;
@@ -54,6 +59,19 @@ sub _mcp_url {
     }
 
     return $cgi_path . $da_script . '/v4/mcp';
+}
+
+sub _mcp_config {
+    my ($url, $token) = @_;
+    return {
+        mcpServers => {
+            'movable-type' => {
+                type    => 'http',
+                url     => $url,
+                headers => { Authorization => "Bearer $token" },
+            },
+        },
+    };
 }
 
 sub show {
@@ -78,15 +96,9 @@ sub show {
         $param->{token} = $token;
 
         require JSON;
-        $param->{config_json} = JSON->new->utf8(0)->pretty->canonical->encode({
-            mcpServers => {
-                'movable-type' => {
-                    type    => 'sse',
-                    url     => _mcp_url($app),
-                    headers => { Authorization => "Bearer $token" },
-                },
-            },
-        });
+        $param->{config_json} = JSON->new->utf8(0)->pretty->canonical->encode(
+            _mcp_config(_mcp_url($app), $token),
+        );
     }
 
     return $app->load_tmpl('mcp_token.tmpl', $param);

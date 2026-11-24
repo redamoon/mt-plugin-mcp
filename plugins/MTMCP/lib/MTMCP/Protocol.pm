@@ -4,7 +4,7 @@ use warnings;
 use utf8;
 use JSON;
 
-our $PROTOCOL_VERSION = '2024-11-05';
+our $PROTOCOL_VERSION = '2025-06-18';
 
 my $json = JSON->new->ascii->canonical;
 

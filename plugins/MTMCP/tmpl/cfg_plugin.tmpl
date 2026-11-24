@@ -21,7 +21,7 @@
     </div>
 
     <p class="hint mt-2">
-      Cursor（<code>~/.cursor/mcp.json</code>）・Claude Desktop（<code>claude_desktop_config.json</code>）
+      Cursor（<code>~/.cursor/mcp.json</code>）・Claude Code（<code>.mcp.json</code>）
       向けの設定です。設定ファイルがまだ無い・MCPサーバーを他に登録していない場合は、
       このJSON全体をそのままファイルに貼り付けてください。既に他のMCPサーバーを
       設定済みの場合は、全体を貼り付けずに <code>movable-type</code> の項目だけを
@@ -65,19 +65,8 @@
             if (data.token) {
                 document.getElementById('mtmcp-token-value').value = data.token;
 
-                var config = {
-                    mcpServers: {
-                        'movable-type': {
-                            type: 'sse',
-                            url: data.mcp_url,
-                            headers: {
-                                Authorization: 'Bearer ' + data.token
-                            }
-                        }
-                    }
-                };
                 document.getElementById('mtmcp-config-example').textContent =
-                    JSON.stringify(config, null, 2);
+                    JSON.stringify(data.mcp_config, null, 2);
                 document.getElementById('mtmcp-result').style.display = 'block';
             } else {
                 document.getElementById('mtmcp-error').textContent = data.error || 'エラーが発生しました';
