@@ -6,10 +6,11 @@ use JSON;
 my $json = JSON->new->ascii->canonical;
 
 sub handle {
-    my ($app, $endpoint) = @_;
+    my ($app) = @_;
 
-    unless ($app->request_method eq 'POST') {
-        return _respond($app, 405, { error => 'Method Not Allowed' });
+    return handle_get($app) unless $app->request_method eq 'POST';
+    unless (_origin_allowed($app)) {
+        return _respond($app, 403, { error => 'Forbidden origin' });
     }
 
     my $ct = $app->get_header('Content-Type') // $ENV{CONTENT_TYPE} // '';
@@ -19,6 +20,12 @@ sub handle {
 
     my $err = _check_auth($app);
     return $err if $err;
+
+    require MTMCP::Protocol;
+    my $version = $app->get_header('MCP-Protocol-Version');
+    if (defined $version && $version ne $MTMCP::Protocol::PROTOCOL_VERSION) {
+        return _respond($app, 400, { error => 'Unsupported MCP-Protocol-Version' });
+    }
 
     my $body = $app->param('POSTDATA') // $app->request_content // '';
     my $req  = eval { $json->decode($body) };
@@ -40,7 +47,6 @@ sub handle {
         });
     }
 
-    require MTMCP::Protocol;
     my $response = MTMCP::Protocol::dispatch($app, $req);
 
     # 通知（レスポンス本文を持たない）は Streamable HTTP の仕様どおり 202 を返す。
@@ -53,59 +59,44 @@ sub handle {
     return _respond($app, 200, $response);
 }
 
+sub handle_get {
+    my ($app) = @_;
+    unless (_origin_allowed($app)) {
+        return _respond($app, 403, { error => 'Forbidden origin' });
+    }
+    $app->set_header('Allow' => 'POST, OPTIONS');
+    return _respond($app, 405, { error => 'Method Not Allowed' });
+}
+
 sub handle_options {
     my ($app) = @_;
+    unless (_origin_allowed($app)) {
+        return _respond($app, 403, { error => 'Forbidden origin' });
+    }
     _set_cors_headers($app);
     $app->response_code(204);
     return '';
 }
 
-# SSE endpoint — MCP クライアントが GET で接続し、POST 先 URL を受け取る
-sub handle_sse {
+# 同一オリジンと MT の Data API 設定で明示されたオリジンを許可する。
+sub _origin_allowed {
     my ($app) = @_;
+    my $origin = $app->get_header('Origin');
+    return 1 unless defined $origin;
+    return 0 unless $origin =~ m{\Ahttps?://[^/?#\s,]+\z}i;
 
-    my $err = _check_auth($app);
-    return $err if $err;
-
-    # POST エンドポイント URL を組み立てる
-    my $base = $app->base;
-    $base =~ s{/$}{};
-    my $script = $app->mt_uri // '/mt-data-api.cgi';
-    $script =~ s{/$}{};
-    my $post_url = $base . $script . '/v4/mcp';
-
-    _set_cors_headers($app);
-    $app->response_code(200);
-    $app->set_header('Content-Type'  => 'text/event-stream');
-    $app->set_header('Cache-Control' => 'no-cache');
-    $app->set_header('Connection'    => 'keep-alive');
-
-    # endpoint イベントを送信（クライアントはこの URL に JSON-RPC を POST する）
-    return "event: endpoint\ndata: $post_url\n\n";
+    my $configured = $app->config->DataAPICORSAllowOrigin // '';
+    return scalar grep { $_ eq $origin } ($app->base, split /\s*,\s*/, $configured);
 }
 
 sub _check_auth {
     my ($app) = @_;
 
-    my $token;
-
-    # 優先: Authorization: Bearer <token>  (CGIPassAuth or RewriteRule が必要)
+    # Apache の RewriteRule 経由では REDIRECT_HTTP_AUTHORIZATION に入る。
     my $auth = $app->get_header('Authorization')
             // $ENV{REDIRECT_HTTP_AUTHORIZATION}
             // '';
-    if ($auth =~ /^Bearer\s+(.+)$/i) {
-        $token = $1;
-    }
-
-    # フォールバック: X-MT-Authorization: MTAuth accessToken=<token>
-    # Apache がカスタムヘッダーをそのまま CGI に渡すため設定不要
-    unless ($token) {
-        my $mt_auth = $app->get_header('X-MT-Authorization') // '';
-        if ($mt_auth =~ /MTAuth\s+accessToken=(\S+)/i) {
-            $token = $1;
-        }
-    }
-
+    my ($token) = $auth =~ /\ABearer[ \t]+(\S+)\z/i;
     unless ($token) {
         $app->set_header('WWW-Authenticate' => _www_authenticate($app));
         return _respond($app, 401, { error => 'Unauthorized' });
@@ -153,8 +144,8 @@ sub _www_authenticate {
 sub _set_cors_headers {
     my ($app) = @_;
     $app->set_header('Access-Control-Allow-Origin'  => '*');
-    $app->set_header('Access-Control-Allow-Methods' => 'GET, POST, OPTIONS');
-    $app->set_header('Access-Control-Allow-Headers' => 'Authorization, Content-Type');
+    $app->set_header('Access-Control-Allow-Methods' => 'POST, OPTIONS');
+    $app->set_header('Access-Control-Allow-Headers' => 'Authorization, Content-Type, MCP-Protocol-Version');
     $app->set_header('Access-Control-Max-Age'       => '86400');
 }
 

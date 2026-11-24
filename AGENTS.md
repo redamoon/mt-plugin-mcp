@@ -10,7 +10,7 @@
 plugins/MTMCP/                 # プラグイン本体（MT の plugins/ へコピー）
   config.yaml                  # エンドポイント・CMS メソッドの登録
   lib/MTMCP/
-    App.pm                     # Data API ハンドラ・トークン検証・SSE
+    App.pm                     # Streamable HTTP ハンドラ・トークン検証
     Auth.pm                    # ログイン API（/v4/mcp/authenticate）
     OAuth.pm                   # OAuth 2.1 PKCE・refresh・DCR（/v4/mcp/token, /register）
     Perm.pm                    # ブログ単位・システム権限

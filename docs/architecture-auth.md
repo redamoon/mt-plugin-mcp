@@ -90,7 +90,7 @@ package "Movable Type (Web Server)" {
   }
 
   package "MTMCP Plugin" {
-    [App.pm\nhandle / handle_sse] as app
+    [App.pm\nhandle / handle_get / handle_options] as app
     [_check_auth()\nSession + Author] as auth
     [Perm.pm] as perm
     [Protocol.pm\ndispatch()] as protocol
@@ -115,9 +115,9 @@ client --> dcr_ep : POST client metadata → client_id
 client --> token_ep : code / refresh_token → access_token
 client --> authn_ep : POST username/password → access_token
 client --> cms_token : 管理画面でトークン発行
-client --> mcp_ep : HTTP GET/POST\nAuthorization: Bearer <token>
+client --> mcp_ep : HTTP POST\nAuthorization: Bearer <token>
 cgi --> router : ルーティング
-router --> app : GET → handle_sse\nPOST → handle
+router --> app : POST → handle\nGET → handle_get\nOPTIONS → handle_options
 app --> auth : _check_auth()
 auth --> session_db : MT::Session->load(token)\nkind=='DA' & 期限 & author
 auth --> app : OK / 401
@@ -145,7 +145,7 @@ tools_ct --> db
 
 ---
 
-## SSE 接続フロー
+## Streamable HTTP の接続フロー
 
 ```mermaid
 sequenceDiagram
@@ -154,20 +154,24 @@ sequenceDiagram
     participant A  as App.pm
     participant S  as mt_session (DB)
 
-    C->>MT: GET /mt-data-api.cgi/v4/mcp<br/>Authorization: Bearer <access_token>
-    MT->>A: handle_sse()
+    C->>MT: POST /mt-data-api.cgi/v4/mcp<br/>Authorization: Bearer <access_token><br/>JSON-RPC initialize
+    MT->>A: handle()
     A->>A: _check_auth()
     A->>S: MT::Session->load(token)
     S-->>A: session (kind=DA) + Author
 
     alt 有効なセッション（ユーザー紐づき・ACTIVE）
-        A-->>C: 200 text/event-stream<br/>event: endpoint<br/>data: https://.../v4/mcp
-    else 無効 / 期限切れ / 旧形式トークン
+        A-->>C: 200 application/json<br/>initialize の結果
+    else トークンなし / 無効 / 期限切れ
         A-->>C: 401 Unauthorized
     end
 ```
 
-未認証時の `WWW-Authenticate` には `resource_metadata`（`.well-known/oauth-protected-resource`）を付け、OAuth 対応クライアントが認可サーバーを発見できるようにしています。`.well-known` 自体は MT の外側に静的配置します。
+同じ URL にツール呼び出しを POST し、JSON で結果を受け取ります。受理した通知には本文なしの `202 Accepted`、GET には `405 Method Not Allowed` を返します。POST の `MCP-Protocol-Version` ヘッダーを送る場合は `initialize` が返したバージョンを指定します。
+
+`Origin` が付くリクエストは、MT のオリジンと `DataAPICORSAllowOrigin` で個別に指定したオリジンを許可します。ブラウザーから別オリジンで接続する場合は、MT の `DataAPICORSAllowHeaders` に `Authorization`、`Content-Type`、`MCP-Protocol-Version` を含めてください。
+
+Bearer トークンがない場合は `WWW-Authenticate` に `resource_metadata`（`.well-known/oauth-protected-resource`）を付け、OAuth 対応クライアントが認可サーバーを発見できるようにしています。`.well-known` 自体は MT の外側に静的配置します。
 
 ---
 
@@ -175,7 +179,7 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    A[リクエスト受信] --> B{Authorization Bearer または<br/>X-MT-Authorization あり?}
+    A[リクエスト受信] --> B{Authorization に Bearer トークンあり?}
     B -- No --> E1["401 Unauthorized\nWWW-Authenticate: Bearer realm='MT MCP'"]
     B -- Yes --> D[token を抽出]
     D --> F[MT::Session->load token]
@@ -198,7 +202,7 @@ flowchart TD
 
 ## ヘッダーと Web サーバーの関係
 
-`App.pm` は `Authorization: Bearer` を優先し、無ければ `X-MT-Authorization` にフォールバックする。Web サーバーがリクエストヘッダーを CGI / PSGI まで届けるかどうかは、手前の構成による。
+MCP クライアントが送る `Authorization: Bearer <token>` を、Web サーバー経由で CGI / PSGI まで渡します。
 
 | 構成 | `Authorization` の扱い | 必要な設定 | 備考 |
 |------|------------------------|------------|------|
@@ -206,29 +210,10 @@ flowchart TD
 | Nginx + fcgiwrap（CGI） | 既定では剥がさないが、`fastcgi_params` の書き方で欠ける | `fastcgi_param HTTP_AUTHORIZATION $http_authorization;` を明示 | `.cgi$` だけでは PATH_INFO 付き URI が 404 |
 | Nginx → Starman / PSGI | 独自の `proxy_set_header` で他ヘッダーだけ上書きすると欠ける | `proxy_set_header Authorization $http_authorization;` を明示 | Starman 直結（前段 Nginx なし）では剥がさない |
 | Nginx → Apache | Nginx が転送しても Apache 側でまた剥がされる | 両方必要（転送 + `CGIPassAuth`） | フロントだけ Nginx の構成 |
-| カスタムヘッダー | 剥がさない（ハイフン付きなので `underscores_in_headers` 不要） | 不要 | `X-MT-Authorization: MTAuth accessToken=<token>`。サーバ設定を触れない場合のフォールバック |
-
-Apache CGI での対応は次の3つ：
-
-| 方法 | サーバ設定 | ヘッダー形式 | 備考 |
-|------|-----------|-------------|------|
-| `CGIPassAuth On` | VirtualHost 設定（要権限） | `Authorization: Bearer <token>` | **推奨** |
-| RewriteRule | `.htaccess`（権限低め） | `Authorization: Bearer <token>` | **推奨** |
-| カスタムヘッダー | 不要 | `X-MT-Authorization: MTAuth accessToken=<token>` | フォールバック |
 
 Nginx 向けのサンプル（未検証の草案）は [README の Nginx の場合](../README.md#nginx-の場合) です。
 
-### `Authorization: Bearer` を使う（推奨）
-
-発行したトークンを MCP クライアントの `headers` に指定する。Apache では `Authorization` ヘッダーを CGI に渡す設定が必要。Nginx では FastCGI / リバースプロキシ側で明示する（上表）。OAuth 自動検出に対応したクライアントでは `headers` なしでも接続できる。
-
-### カスタムヘッダーを使う（サーバ設定不要のフォールバック）
-
-Apache はカスタムヘッダー（`X-*`）を剥がさず CGI の `HTTP_X_MT_AUTHORIZATION` 環境変数として渡す。Nginx でもハイフン付きのため `underscores_in_headers` は不要。サーバ設定を変更できない場合のフォールバックとして利用可能。
-
-```
-X-MT-Authorization: MTAuth accessToken=<accessToken>
-```
+手動で発行したトークンは MCP クライアントの `headers` に指定します。OAuth 対応クライアントはログイン後に Bearer ヘッダーを自動で送ります。
 
 ### `.htaccess` で Bearer を通す
 
@@ -252,6 +237,6 @@ RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 | POST | `/v4/mcp/authenticate` | `Auth::handle_login` | ユーザー名/パスワード → トークン |
 | POST | `/v4/mcp/token` | `OAuth::handle_token` | 認可コード+PKCE / refresh_token |
 | POST | `/v4/mcp/register` | `OAuth::handle_register` | Dynamic Client Registration |
-| GET  | `/v4/mcp` | `App::handle_sse` | SSE 接続・POST URL 通知 |
+| GET  | `/v4/mcp` | `App::handle_get` | `405 Method Not Allowed` |
 | POST | `/v4/mcp` | `App::handle` | JSON-RPC 2.0 メッセージ処理 |
 | OPTIONS | `/v4/mcp` | `App::handle_options` | CORS プリフライト |

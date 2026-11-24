@@ -44,7 +44,7 @@ VirtualHost または Directory に次を足して、Apache を再読み込み�
 
 パスは実際の MT インストール先に合わせてください。
 
-サーバ設定を変えられない場合は、`.htaccess` の RewriteRule か、`X-MT-Authorization` ヘッダーがあります。詳細は [README の Apache 設定](../README.md#2-apache-の設定) と [認証アーキテクチャ](architecture-auth.md#ヘッダーと-web-サーバーの関係) です。
+VirtualHost を編集できない場合は、`.htaccess` の RewriteRule で `Authorization` を CGI に渡します。設定例は [README の Apache 設定](../README.md#2-apache-の設定) を参照してください。
 
 Nginx で動かしている場合は、ステップを分岐せず [README の Nginx の場合](../README.md#nginx-の場合) を参照してください。
 
@@ -66,13 +66,13 @@ OAuth（ブラウザログイン）やログイン API は [README のトーク�
 
 ## ステップ 4. Cursor に接続する
 
-`~/.cursor/mcp.json` に次を書きます。URL のホストとパスは自分の MT に合わせてください。
+`~/.cursor/mcp.json` に Streamable HTTP の接続先を設定します。URL のホストとパスは自分の MT に合わせてください。
 
 ```json
 {
   "mcpServers": {
     "movable-type": {
-      "type": "sse",
+      "type": "http",
       "url": "https://example.com/mt/mt-data-api.cgi/v4/mcp",
       "headers": {
         "Authorization": "Bearer <発行したトークン>"

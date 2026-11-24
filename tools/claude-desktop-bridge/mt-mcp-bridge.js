@@ -4,11 +4,8 @@
 /**
  * MT MCP Server 用の stdio <-> HTTP ブリッジ。
  *
- * Claude Desktop の claude_desktop_config.json は、リモートの HTTP/SSE
- * サーバー（"type": "sse" / "url" 形式）を直接サポートしていない
- * （"not a valid MCP server configuration" として無視される）。
- * ローカル環境で MT (mt-data-api.cgi) が HTTP のみ（HTTPS未対応）で動いて
- * いる場合、Claude Desktop のリモートコネクタ機能も使えない。
+ * Claude Desktop の claude_desktop_config.json からローカルコマンドとして
+ * 起動し、MT の Streamable HTTP エンドポイントに接続する。
  *
  * このスクリプトは Claude Desktop が「ローカルコマンド」として起動する
  * MCP サーバーとして振る舞い、標準入出力（stdio）で受け取った JSON-RPC
@@ -113,6 +110,7 @@ rl.on('line', (line) => {
     const req = client.request(target, {
         method: 'POST',
         headers: {
+            'Accept': 'application/json, text/event-stream',
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ' + TOKEN,
             'Content-Length': body.length,
@@ -130,7 +128,7 @@ rl.on('line', (line) => {
                 fail('HTTP ' + res.statusCode + ': ' + text);
                 return;
             }
-            // 通知（notifications/*）には応答本文が無い（204/空ボディ）。
+            // 通知（notifications/*）の HTTP 応答は 202 で本文は空。
             // その場合は stdout に何も書き出さない（JSON-RPC の通知には
             // レスポンスを返さないのが正しい）。
             if (!text) {
